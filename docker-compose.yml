@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: moretranz_db
+      POSTGRES_USER: moretranz_user
+      POSTGRES_PASSWORD: moretranz_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moretranz_user -d moretranz_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://moretranz_user:moretranz_password@db:5432/moretranz_db
+      EMAIL_ADDRESS: ${EMAIL_ADDRESS:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      IMAP_SERVER: ${IMAP_SERVER:-imap.gmail.com}
+      ALLOWED_SENDERS: ${ALLOWED_SENDERS:-""}
+      EMAIL_PROCESSING_ENABLED: ${EMAIL_PROCESSING_ENABLED:-false}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./attachments:/app/attachments
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  # React Frontend
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

@@ -6,8 +6,15 @@ from app.core.config import settings
 
 class PrinterService:
     def __init__(self):
-        self.sumatra_path = "lib/sumatrapdf.exe"
-        self.wkhtmltopdf_path = "lib/wkhtmltox/bin/wkhtmltopdf.exe"
+        # Detect OS and set appropriate paths
+        if os.name == 'posix':  # Linux/Mac (Docker)
+            self.sumatra_path = None  # Not available in Linux
+            self.wkhtmltopdf_path = "wkhtmltopdf"
+            self.is_docker = True
+        else:  # Windows
+            self.sumatra_path = "lib/sumatrapdf.exe"
+            self.wkhtmltopdf_path = "lib/wkhtmltox/bin/wkhtmltopdf.exe"
+            self.is_docker = False
 
     async def print_file(self, attachment: Attachment) -> bool:
         try:
@@ -15,6 +22,11 @@ class PrinterService:
             file_type = attachment.file_type.lower()
             
             if file_type in ['pdf', 'png', 'jpg', 'jpeg']:
+                # In Docker, skip actual printing (no printer access)
+                if self.is_docker:
+                    print(f"📄 Docker mode: Skipping print for {file_path} (printers not available in container)")
+                    return True  # Return True to not block processing
+                
                 printer_name = (settings.ATTACHMENT_PRINTER 
                               if self.is_label_file(file_path) 
                               else settings.BODY_PRINTER)

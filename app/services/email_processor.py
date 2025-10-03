@@ -183,11 +183,14 @@ def convert_html_to_letter_pdf(html_content: str, output_pdf: str) -> bool:
 def convert_html_to_pdf(html_file_path: str, pdf_file_path: str) -> bool:
     """Convert HTML file to PDF using wkhtmltopdf"""
     try:
-        # Use local wkhtmltopdf executable
-        wkhtmltopdf_path = "lib/wkhtmltox/bin/wkhtmltopdf.exe"
+        # Detect if running in Docker (Linux) or Windows
+        if os.name == 'posix':  # Linux/Mac (Docker)
+            wkhtmltopdf_path = "wkhtmltopdf"  # Use system wkhtmltopdf
+        else:  # Windows
+            wkhtmltopdf_path = "lib/wkhtmltox/bin/wkhtmltopdf.exe"
         
-        # Check if the executable exists
-        if not os.path.exists(wkhtmltopdf_path):
+        # Check if the executable exists (for Windows)
+        if os.name != 'posix' and not os.path.exists(wkhtmltopdf_path):
             print(f"❌ wkhtmltopdf executable not found at {wkhtmltopdf_path}")
             return False
         
