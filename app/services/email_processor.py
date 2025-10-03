@@ -13,11 +13,33 @@ import subprocess
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 from PIL import Image
+from bs4 import BeautifulSoup
+import requests
+from urllib.parse import urlparse, unquote
 
 from app.core.config import settings
 from app.models.order import Order, Attachment, ProcessingLog, PrintJob, EmailConfig as EmailConfigModel
 from app.services.printer_service import PrinterService
 from app.websocket_manager import manager
+
+# Order type mapping - maps human-readable names to internal format
+ORDER_TYPE_MAPPING = {
+    "DTF": "dtf_textile",
+    "ProColor": "dtf_procolor",
+    "Glitter": "dtf_glitter",
+    "UV DTF": "dtf_uv",
+    "Sublimation": "dtf_sublimation",
+    "Glow in the Dark": "dtf_glow",
+    "Gold Foil": "dtf_gold_foil",
+    "Reflective": "dtf_reflective",
+    "Pearl": "dtf_pearl",
+    "Iridescent": "dtf_iridescent",
+    "Spangle": "spangle",
+    "Thermochromic": "dtf_thermochromic"
+}
+
+# Reverse mapping for lookups
+INTERNAL_TO_DISPLAY = {v: k for k, v in ORDER_TYPE_MAPPING.items()}
 
 def get_email_body(msg):
     """Extract plain text body from email."""
@@ -30,6 +52,25 @@ def get_email_body(msg):
     else:
         return msg.get_payload(decode=True).decode(errors="ignore")
     return ""
+
+def get_email_html_body(msg):
+    """Extract HTML body from email."""
+    if msg.is_multipart():
+        for part in msg.walk():
+            ctype = part.get_content_type()
+            disp = str(part.get("Content-Disposition"))
+            if ctype == "text/html" and "attachment" not in disp:
+                try:
+                    return part.get_payload(decode=True).decode(errors="ignore")
+                except:
+                    return None
+    else:
+        if msg.get_content_type() == "text/html":
+            try:
+                return msg.get_payload(decode=True).decode(errors="ignore")
+            except:
+                return None
+    return None
 
 def decode_email_subject(subject):
     """Decode email subject with proper charset handling."""
@@ -114,6 +155,134 @@ def sanitize_folder_name(name: str) -> str:
     # Remove extra spaces and limit length
     sanitized = re.sub(r'\s+', ' ', sanitized).strip()
     return sanitized[:50]  # Limit to 50 characters
+
+def extract_download_urls_from_html(html_content: str) -> List[Dict[str, str]]:
+    """Extract download URLs from HTML email body with their context"""
+    if not html_content:
+        return []
+    
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        download_links = []
+        
+        # Find all links with "Download" text
+        for link in soup.find_all('a', href=True):
+            link_text = link.get_text(strip=True)
+            if 'download' in link_text.lower():
+                url = link['href']
+                
+                # Try to determine the order type and context
+                # Look at parent elements for context
+                context = ""
+                parent = link.parent
+                for _ in range(5):  # Check up to 5 parent levels
+                    if parent:
+                        parent_text = parent.get_text(strip=True)
+                        context = parent_text
+                        parent = parent.parent
+                    else:
+                        break
+                
+                download_links.append({
+                    'url': url,
+                    'link_text': link_text,
+                    'context': context
+                })
+        
+        return download_links
+    except Exception as e:
+        print(f"❌ Error extracting URLs from HTML: {str(e)}")
+        return []
+
+def detect_order_type_from_context(context: str, link_text: str) -> Optional[Tuple[str, int]]:
+    """Detect order type and sheet number from context
+    Returns: (order_type, sheet_number) or None
+    """
+    # Combine context and link text for analysis
+    full_text = f"{context} {link_text}"
+    
+    # Try to find gang sheet number
+    sheet_number = 1
+    sheet_match = re.search(r'Gang Sheet #?(\d+)', full_text, re.IGNORECASE)
+    if sheet_match:
+        sheet_number = int(sheet_match.group(1))
+    
+    # Check for each order type
+    for order_type in ORDER_TYPE_MAPPING.keys():
+        # Case-insensitive search for order type
+        if re.search(r'\b' + re.escape(order_type) + r'\b', full_text, re.IGNORECASE):
+            return (order_type, sheet_number)
+    
+    # Check for variations
+    if 'UV DTF' in full_text or 'UV-DTF' in full_text or 'UVDTF' in full_text:
+        return ('UV DTF', sheet_number)
+    if 'Glow' in full_text:
+        return ('Glow in the Dark', sheet_number)
+    if 'Gold' in full_text and 'Foil' in full_text:
+        return ('Gold Foil', sheet_number)
+        
+    return None
+
+async def download_file_from_url(url: str, save_path: str, timeout: int = 60) -> bool:
+    """Download file from URL and save to specified path
+    
+    Args:
+        url: URL to download from
+        save_path: Local path to save the file
+        timeout: Request timeout in seconds
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        print(f"📥 Downloading from URL: {url}")
+        
+        # Make the request with a user agent to avoid blocking
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=timeout, stream=True)
+        response.raise_for_status()  # Raise exception for bad status codes
+        
+        # Save the file
+        with open(save_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        
+        file_size = os.path.getsize(save_path)
+        print(f"✅ Downloaded successfully: {save_path} ({file_size} bytes)")
+        return True
+        
+    except requests.exceptions.Timeout:
+        print(f"❌ Download timed out after {timeout} seconds: {url}")
+        return False
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Failed to download from URL: {str(e)}")
+        return False
+    except Exception as e:
+        print(f"❌ Unexpected error during download: {str(e)}")
+        return False
+
+def get_filename_from_url(url: str, default_name: str = "download") -> str:
+    """Extract filename from URL or use default"""
+    try:
+        # Parse the URL
+        parsed = urlparse(url)
+        path = unquote(parsed.path)
+        
+        # Get the last part of the path
+        filename = os.path.basename(path)
+        
+        # If no filename or no extension, use default
+        if not filename or '.' not in filename:
+            # Try to detect file type from URL or use default
+            return f"{default_name}.png"  # Default to PNG for images
+        
+        return filename
+    except:
+        return f"{default_name}.png"
 
 def convert_image_to_4x6_pdf(img_path: str, output_pdf: str, top_margin_inch: float = -0.5) -> bool:
     """Convert image to 4x6 inch PDF label"""
@@ -275,7 +444,8 @@ class EmailProcessor:
 
         # Extract print jobs
         print_jobs = []
-        for job_type in ["DTF", "Sublimation", "ProColor", "Glitter"]:
+        # Support all order types from the mapping
+        for job_type in ORDER_TYPE_MAPPING.keys():
             if job_type in order_types:
                 # Find section for this job type
                 section_match = re.search(rf"{job_type}.*?(?=\n\n|\Z)", body, re.DOTALL)
@@ -435,6 +605,9 @@ class EmailProcessor:
                                 # Process attachments
                                 await self.process_attachments(email_message, order)
                                 
+                                # Process download URLs from email body
+                                await self.process_download_urls(email_message, order)
+                                
                                 # Create email body PDF
                                 await self.create_email_body_pdf(email_message, order, body)
                                 
@@ -498,7 +671,8 @@ class EmailProcessor:
                         # Determine sheet type and number from filename
                         sheet_type = None
                         sheet_number = None
-                        for job_type in ["DTF", "Sublimation", "ProColor", "Glitter"]:
+                        # Check all supported order types
+                        for job_type in ORDER_TYPE_MAPPING.keys():
                             if job_type in filename:
                                 sheet_type = f"{job_type} Gang Sheet"
                                 num_match = re.search(r"#(\d+)", filename)
@@ -550,6 +724,103 @@ class EmailProcessor:
                     except Exception as e:
                         print(f"❌ Failed to process attachment: {str(e)}")
                         self.log_to_db("Attachment Processing", "failed", str(e), order.id)
+
+    async def process_download_urls(self, email_msg: email.message.Message, order: Order):
+        """Process download URLs from email body HTML"""
+        try:
+            # Extract HTML body
+            html_body = get_email_html_body(email_msg)
+            if not html_body:
+                print("ℹ️ No HTML body found, skipping URL downloads")
+                return
+            
+            # Extract download URLs
+            download_links = extract_download_urls_from_html(html_body)
+            
+            if not download_links:
+                print("ℹ️ No download links found in email")
+                return
+            
+            print(f"\n🔗 Found {len(download_links)} download link(s) in email")
+            
+            # Process each download link
+            for idx, link_info in enumerate(download_links, 1):
+                url = link_info['url']
+                link_text = link_info['link_text']
+                context = link_info['context']
+                
+                print(f"\n📥 Processing download {idx}/{len(download_links)}")
+                print(f"Link text: {link_text}")
+                print(f"URL: {url}")
+                
+                # Detect order type and sheet number from context
+                type_info = detect_order_type_from_context(context, link_text)
+                
+                if type_info:
+                    order_type, sheet_number = type_info
+                    print(f"Detected: {order_type} Gang Sheet #{sheet_number}")
+                    
+                    # Generate filename
+                    internal_type = ORDER_TYPE_MAPPING.get(order_type, "unknown")
+                    base_filename = get_filename_from_url(url, f"{internal_type}_sheet_{sheet_number}")
+                    
+                    # Ensure unique filename
+                    file_path = os.path.join(order.folder_path, base_filename)
+                    counter = 1
+                    while os.path.exists(file_path):
+                        name, ext = os.path.splitext(base_filename)
+                        file_path = os.path.join(order.folder_path, f"{name}_{counter}{ext}")
+                        counter += 1
+                    
+                    # Download the file
+                    if await download_file_from_url(url, file_path):
+                        # Determine file type
+                        file_extension = base_filename.split('.')[-1].lower()
+                        
+                        # Convert to PDF if it's an image
+                        pdf_file_path = None
+                        if file_extension in ['png', 'jpg', 'jpeg', 'gif', 'bmp']:
+                            pdf_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}_label.pdf"
+                            pdf_file_path = os.path.join(order.folder_path, pdf_filename)
+                            
+                            print(f"🔄 Converting downloaded image to PDF: {pdf_file_path}")
+                            if convert_image_to_4x6_pdf(file_path, pdf_file_path):
+                                print(f"✅ PDF conversion successful")
+                            else:
+                                print(f"❌ PDF conversion failed, keeping original file")
+                                pdf_file_path = file_path
+                        elif file_extension == 'pdf':
+                            pdf_file_path = file_path
+                        else:
+                            pdf_file_path = file_path
+                        
+                        # Save attachment record
+                        attachment = Attachment(
+                            order_id=order.id,
+                            file_name=os.path.basename(file_path),
+                            file_path=file_path,
+                            pdf_path=pdf_file_path if pdf_file_path and pdf_file_path.endswith('.pdf') else None,
+                            file_type=file_extension,
+                            print_status="pending",
+                            sheet_type=f"{order_type} Gang Sheet",
+                            sheet_number=sheet_number
+                        )
+                        self.db.add(attachment)
+                        self.db.commit()
+                        print(f"✅ Download saved to database")
+                        
+                        # Print the downloaded file
+                        await self.printer_service.print_file(attachment)
+                    else:
+                        print(f"❌ Failed to download file from URL")
+                        self.log_to_db("URL Download", "failed", f"Failed to download: {url}", order.id)
+                else:
+                    print(f"⚠️ Could not detect order type from context, skipping download")
+                    print(f"Context: {context[:200]}...")
+                    
+        except Exception as e:
+            print(f"❌ Error processing download URLs: {str(e)}")
+            self.log_to_db("URL Processing", "failed", str(e), order.id)
 
     async def create_email_body_pdf(self, email_msg: email.message.Message, order: Order, email_body: str):
         """Create PDF from email body content"""
