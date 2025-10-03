@@ -43,6 +43,12 @@ yarn-error.log*
 attachments/
 logs/
 *.log
+lib/
+frontend/node_modules/
+frontend/build/
+__pycache__/
+*.pyc
+venv/
 
 # Testing
 .coverage
