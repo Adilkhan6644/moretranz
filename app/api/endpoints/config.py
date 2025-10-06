@@ -7,6 +7,8 @@ from app.models.order import EmailConfig as EmailConfigModel
 from app.models.order import PrinterConfig as PrinterConfigModel
 from pydantic import BaseModel
 from app.core.config import settings
+from app.api.endpoints.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -26,7 +28,7 @@ class EmailConfigResponse(BaseModel):
     sleep_time: int
 
 @router.get("/email", response_model=EmailConfigResponse)
-def get_email_config(db: Session = Depends(get_db)):
+def get_email_config(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Get current email configuration"""
     config = db.query(EmailConfigModel).first()
     if not config:
@@ -46,7 +48,7 @@ def get_email_config(db: Session = Depends(get_db)):
     }
 
 @router.put("/email")
-def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db)):
+def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Update email configuration"""
     db_config = db.query(EmailConfigModel).first()
     if not db_config:
@@ -73,14 +75,15 @@ def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db)
     return {"status": "Email configuration updated successfully"}
 
 @router.get("/printers", response_model=List[PrinterConfig])
-def get_printer_configs(db: Session = Depends(get_db)):
+def get_printer_configs(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return db.query(PrinterConfigModel).all()
 
 @router.put("/printers/{printer_id}", response_model=PrinterConfig)
 def update_printer_config(
     printer_id: int,
     config: PrinterConfig,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
 ):
     db_config = db.query(PrinterConfigModel).filter(PrinterConfigModel.id == printer_id).first()
     if not db_config:

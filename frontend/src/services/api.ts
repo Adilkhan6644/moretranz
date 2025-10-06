@@ -9,6 +9,46 @@ const api = axios.create({
   },
 });
 
+// --- Auth token helpers ---
+const TOKEN_KEY = 'auth_token';
+
+export function setAuthToken(token: string | null) {
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+// Attach token to requests
+api.interceptors.request.use((config) => {
+  const token = getAuthToken();
+  if (token) {
+    config.headers = config.headers || {};
+    (config.headers as any)['Authorization'] = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Redirect to login on 401
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err?.response?.status === 401) {
+      setAuthToken(null);
+      // Soft redirect without importing router (works in SPA)
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(err);
+  }
+);
+
 export interface EmailConfig {
   email_address: string;
   email_password: string;
@@ -50,6 +90,29 @@ export interface PrintJob {
 }
 
 export const apiService = {
+  // Auth
+  async login(username: string, password: string) {
+    const form = new URLSearchParams();
+    form.append('grant_type', 'password');
+    form.append('username', username);
+    form.append('password', password);
+    const response = await api.post('/auth/login', form.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    const token = response.data?.access_token as string | undefined;
+    if (token) setAuthToken(token);
+    return response;
+  },
+
+  logout() {
+    setAuthToken(null);
+  },
+
+  async register(username: string, password: string, fullName?: string) {
+    const response = await api.post('/auth/register', { username, password, full_name: fullName });
+    return response;
+  },
+
   // Email Configuration
   async getEmailConfig() {
     const response = await api.get('/config/email');

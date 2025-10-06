@@ -8,6 +8,8 @@ from app.schemas.order import Order, OrderCreate
 from app.services.email_processor import EmailProcessor
 from app.models.order import Order as OrderModel, Attachment, PrintJob, ProcessingLog
 from app.websocket_manager import manager
+from app.api.endpoints.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -15,14 +17,15 @@ router = APIRouter()
 def get_orders(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
 ):
     """Get all processed orders"""
     orders = db.query(OrderModel).order_by(OrderModel.processed_time.desc()).offset(skip).limit(limit).all()
     return orders
 
 @router.get("/latest", response_model=Order)
-def get_latest_order(db: Session = Depends(get_db)):
+def get_latest_order(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Get the most recently processed order"""
     order = db.query(OrderModel).order_by(OrderModel.processed_time.desc()).first()
     if not order:
@@ -42,7 +45,8 @@ async def get_processing_status():
 @router.get("/{order_id}", response_model=Order)
 def get_order(
     order_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
 ):
     """Get a specific order by ID"""
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
@@ -53,7 +57,8 @@ def get_order(
 @router.delete("/{order_id}")
 def delete_order(
     order_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
 ):
     """Delete a specific order by ID"""
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
@@ -79,7 +84,7 @@ def delete_order(
         raise HTTPException(status_code=500, detail=f"Error deleting order: {str(e)}")
 
 @router.get("/attachments/{attachment_id}")
-def get_attachment_info(attachment_id: int, db: Session = Depends(get_db)):
+def get_attachment_info(attachment_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Get attachment information"""
     attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
     if not attachment:
@@ -100,7 +105,8 @@ def get_attachment_info(attachment_id: int, db: Session = Depends(get_db)):
 def download_attachment(
     attachment_id: int, 
     format: str = "pdf",  # Default to PDF
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
 ):
     """Download an attachment file. Use format=original to get original file."""
     attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
@@ -145,7 +151,8 @@ email_processor = None
 @router.post("/start-processing")
 async def start_processing(
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
 ):
     """Start the email processing service"""
     global email_processor
@@ -166,7 +173,7 @@ async def start_processing(
     return {"status": "Email processing started"}
 
 @router.post("/stop-processing")
-async def stop_processing():
+async def stop_processing(_: User = Depends(get_current_user)):
     """Stop the email processing service"""
     global email_processor
     if email_processor:
