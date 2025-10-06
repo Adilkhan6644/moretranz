@@ -89,11 +89,36 @@ def decode_email_subject(subject):
         return str(subject)
 
 def parse_date(date_str: str) -> datetime:
-    """Parse date string in format: Monday, September 29, 2025"""
-    try:
-        return datetime.strptime(date_str.strip(), "%A, %B %d, %Y")
-    except:
+    """Parse date strings from emails into datetime.
+    Accepts common variants like:
+    - "Thursday, October 02, 2025"
+    - "Thursday, October 2, 2025"
+    - "Thursday, October 02 2025"
+    Falls back to current UTC time if parsing fails.
+    """
+    if not date_str:
         return datetime.utcnow()
+
+    # Normalize whitespace and strip any text after the year
+    cleaned = re.sub(r"\s+", " ", date_str).strip()
+    # Keep only up to the first 4-digit year
+    m = re.search(r"^(.*?\b\d{4})\b", cleaned)
+    if m:
+        cleaned = m.group(1)
+
+    # Try multiple expected formats
+    formats = [
+        "%A, %B %d, %Y",
+        "%A, %B %d %Y",
+        "%A, %b %d, %Y",
+        "%A, %b %d %Y",
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(cleaned, fmt)
+        except Exception:
+            continue
+    return datetime.utcnow()
 
 def parse_print_length(text: str) -> float:
     """Extract print length from text like: Total Print Length: 98.74 inches"""
@@ -425,8 +450,22 @@ class EmailProcessor:
     def parse_order_details(self, body: str) -> Dict:
         """Parse order details from email body"""
         # Extract PO Number
-        po_match = re.search(r"PO Number:\s*(\w+)", body)
-        po_number = po_match.group(1) if po_match else None
+        # Handle variations:
+        # - Collapsed lines: "PO Number: 22121Order Type: ..." → stop before "Order Type:"
+        # - Alphanumeric POs: "1R (Replacement)" → keep "1R"
+        # - Long numeric POs
+        po_match = re.search(r"PO Number:\s*([^\r\n]+?)\s*(?=(?:\r?\n|Order Type:))", body, re.IGNORECASE)
+        raw_po = po_match.group(1).strip() if po_match else None
+        if raw_po:
+            # Remove any parenthetical notes, e.g., "1R (Replacement)" → "1R"
+            raw_po = re.sub(r"\(.*?\)", "", raw_po).strip()
+            # If the collapsed text still ends with the word 'Order', drop it
+            raw_po = re.sub(r"\s*Order$", "", raw_po, flags=re.IGNORECASE).strip()
+            # Finally, allow alphanumeric and dashes/underscores only
+            po_clean_match = re.match(r"([A-Za-z0-9_-]+)", raw_po)
+            po_number = po_clean_match.group(1) if po_clean_match else raw_po
+        else:
+            po_number = None
 
         # Extract order types
         order_types = parse_order_types(body)

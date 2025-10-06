@@ -143,6 +143,15 @@ const Orders: React.FC = () => {
     };
 
     websocketService.onNewOrder(handleNewOrder);
+    // When a new order arrives, refresh the full list so attachments and jobs are present
+    websocketService.onNewOrder(async () => {
+      try {
+        const response = await apiService.getAllOrders();
+        setOrders(response.data || []);
+      } catch (err) {
+        console.error('Failed to refresh orders on websocket update', err);
+      }
+    });
 
     // Cleanup
     return () => {
@@ -168,8 +177,17 @@ const Orders: React.FC = () => {
     return new Date(dateString).toLocaleString();
   };
 
-  const handleViewOrder = (order: Order) => {
+  const handleViewOrder = async (order: Order) => {
+    // Optimistically open with current data
     setSelectedOrder(order);
+    try {
+      const full = await apiService.getOrderById(order.id);
+      if (full && full.data) {
+        setSelectedOrder(full.data);
+      }
+    } catch (e) {
+      console.error('Failed to load full order details', e);
+    }
   };
 
   const handleDownloadFile = (attachmentId: number, format: 'pdf' | 'original' = 'pdf') => {
