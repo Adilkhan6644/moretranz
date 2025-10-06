@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
 
 const inputStyle: React.CSSProperties = {
@@ -13,12 +14,17 @@ const inputStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = { fontSize: 13, color: '#5b6b7b', marginBottom: 6, display: 'block' };
 
 const Login: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Get the page they were trying to access
+  const from = (location.state as any)?.from?.pathname || '/orders';
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +35,7 @@ const Login: React.FC = () => {
         await apiService.register(username, password, fullName);
       }
       await apiService.login(username, password);
-      window.location.href = '/orders';
+      navigate(from, { replace: true });
     } catch (err) {
       setError(mode === 'signup' ? 'Sign up failed' : 'Invalid credentials');
     } finally {

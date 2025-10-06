@@ -6,6 +6,7 @@ import os
 from app.db.session import get_db
 from app.schemas.order import Order, OrderCreate
 from app.services.email_processor import EmailProcessor
+from app.services.scheduler import email_scheduler
 from app.models.order import Order as OrderModel, Attachment, PrintJob, ProcessingLog
 from app.websocket_manager import manager
 from app.api.endpoints.auth import get_current_user
@@ -17,11 +18,18 @@ router = APIRouter()
 def get_orders(
     skip: int = 0,
     limit: int = 100,
+    search: str = None,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user)
 ):
-    """Get all processed orders"""
-    orders = db.query(OrderModel).order_by(OrderModel.processed_time.desc()).offset(skip).limit(limit).all()
+    """Get all processed orders with optional PO number search"""
+    query = db.query(OrderModel)
+    
+    # Add search filter if provided
+    if search:
+        query = query.filter(OrderModel.po_number.ilike(f"%{search}%"))
+    
+    orders = query.order_by(OrderModel.processed_time.desc()).offset(skip).limit(limit).all()
     return orders
 
 @router.get("/latest", response_model=Order)
@@ -35,12 +43,13 @@ def get_latest_order(db: Session = Depends(get_db), _: User = Depends(get_curren
 @router.get("/processing-status")
 async def get_processing_status():
     """Get the current status of email processing"""
-    global email_processor
-    if email_processor and email_processor.is_running:
-        print(f"🔍 Status check: Email processor is running (is_running={email_processor.is_running})")
-        return {"status": "running", "is_processing": True}
-    print(f"🔍 Status check: Email processor is stopped (email_processor={email_processor is not None}, is_running={email_processor.is_running if email_processor else 'N/A'})")
-    return {"status": "stopped", "is_processing": False}
+    status = email_scheduler.get_status()
+    return {
+        "status": "running" if status["is_running"] else "stopped",
+        "is_processing": status["is_running"],
+        "scheduler_running": status["scheduler_running"],
+        "jobs": status["jobs"]
+    }
 
 @router.get("/{order_id}", response_model=Order)
 def get_order(
@@ -146,42 +155,31 @@ def download_attachment(
         headers={"Content-Disposition": f"attachment; filename={file_name}"}
     )
 
-email_processor = None
-
 @router.post("/start-processing")
 async def start_processing(
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user)
 ):
     """Start the email processing service"""
-    global email_processor
-    if email_processor and email_processor.is_running:
-        print("🚫 Start processing: Already running")
+    if email_scheduler.is_running:
         return {"status": "Email processing is already running"}
     
-    print("🚀 Starting email processing service...")
-    email_processor = EmailProcessor(db)
-    email_processor.is_running = True
-    print(f"✅ Email processor created with is_running={email_processor.is_running}")
-    background_tasks.add_task(email_processor.start_processing)
-    print("📋 Background task added")
+    # Get sleep time from email config
+    from app.models.order import EmailConfig as EmailConfigModel
+    email_config = db.query(EmailConfigModel).first()
+    sleep_time = email_config.sleep_time if email_config else 5
     
-    # Broadcast status update via WebSocket
-    background_tasks.add_task(broadcast_status_update, {"status": "running", "is_processing": True})
-    
+    await email_scheduler.start_processing(sleep_time)
     return {"status": "Email processing started"}
 
 @router.post("/stop-processing")
 async def stop_processing(_: User = Depends(get_current_user)):
     """Stop the email processing service"""
-    global email_processor
-    if email_processor:
-        email_processor.stop_processing()
-        # Broadcast status update via WebSocket
-        await broadcast_status_update({"status": "stopped", "is_processing": False})
-        return {"status": "Email processing stopped"}
-    return {"status": "No email processor running"}
+    if not email_scheduler.is_running:
+        return {"status": "Email processing is not running"}
+        
+    await email_scheduler.stop_processing()
+    return {"status": "Email processing stopped"}
 
 async def broadcast_status_update(status_data: dict):
     """Broadcast status update to all connected WebSocket clients"""

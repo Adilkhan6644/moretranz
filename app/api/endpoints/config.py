@@ -50,7 +50,11 @@ def get_email_config(db: Session = Depends(get_db), _: User = Depends(get_curren
 @router.put("/email")
 def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Update email configuration"""
+    from app.services.scheduler import email_scheduler
+    
     db_config = db.query(EmailConfigModel).first()
+    old_sleep_time = db_config.sleep_time if db_config else 5
+    
     if not db_config:
         # Create new config if none exists
         db_config = EmailConfigModel(
@@ -72,6 +76,11 @@ def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db)
         db_config.sleep_time = config.sleep_time
     
     db.commit()
+    
+    # Update scheduler interval if it changed and scheduler is running
+    if email_scheduler.is_running and old_sleep_time != config.sleep_time:
+        email_scheduler.update_interval(config.sleep_time)
+    
     return {"status": "Email configuration updated successfully"}
 
 @router.get("/printers", response_model=List[PrinterConfig])

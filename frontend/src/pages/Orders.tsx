@@ -12,7 +12,9 @@ import {
   Trash2,
   Loader2,
   Play,
-  Square
+  Square,
+  Search,
+  X
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import websocketService, { OrderData } from '../services/websocket';
@@ -56,6 +58,12 @@ const Orders: React.FC = () => {
   const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; order: Order | null }>({ show: false, order: null });
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [searchLoading, setSearchLoading] = useState(false);
+  
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     // Initial setup
@@ -146,8 +154,7 @@ const Orders: React.FC = () => {
     // When a new order arrives, refresh the full list so attachments and jobs are present
     websocketService.onNewOrder(async () => {
       try {
-        const response = await apiService.getAllOrders();
-        setOrders(response.data || []);
+        await fetchOrders(searchTerm, currentPage);
       } catch (err) {
         console.error('Failed to refresh orders on websocket update', err);
       }
@@ -159,9 +166,10 @@ const Orders: React.FC = () => {
     };
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (search?: string, page: number = 0) => {
     try {
-      const response = await apiService.getAllOrders();
+      setSearchLoading(true);
+      const response = await apiService.getAllOrders(search, page * ITEMS_PER_PAGE, ITEMS_PER_PAGE);
       setOrders(response.data || []);
       setError(null);
     } catch (err) {
@@ -169,7 +177,25 @@ const Orders: React.FC = () => {
       console.error('Orders fetch error:', err);
     } finally {
       setLoading(false);
+      setSearchLoading(false);
     }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCurrentPage(0);
+    fetchOrders(searchTerm, 0);
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(0);
+    fetchOrders('', 0);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    fetchOrders(searchTerm, newPage);
   };
 
 
@@ -239,6 +265,58 @@ const Orders: React.FC = () => {
         </div>
       </div>
 
+      {/* Search Bar */}
+      <div className="card" style={{ marginBottom: '20px' }}>
+        <div className="card-body">
+          <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+              <input
+                type="text"
+                placeholder="Search by PO number..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 40px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  outline: 'none',
+                  fontSize: '14px'
+                }}
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#666'
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={searchLoading}
+              style={{ padding: '10px 20px', whiteSpace: 'nowrap' }}
+            >
+              {searchLoading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              {searchLoading ? 'Searching...' : 'Search'}
+            </button>
+          </form>
+        </div>
+      </div>
+
       {error && (
         <div className="alert alert-error">
           {error}
@@ -249,8 +327,24 @@ const Orders: React.FC = () => {
         <div className="card">
           <div className="card-body" style={{ textAlign: 'center', padding: '40px' }}>
             <Package size={48} style={{ color: '#95a5a6', marginBottom: '20px' }} />
-            <h3 style={{ color: '#7f8c8d', marginBottom: '10px' }}>No Orders Found</h3>
-            <p style={{ color: '#95a5a6' }}>Orders will appear here once email processing begins.</p>
+            <h3 style={{ color: '#7f8c8d', marginBottom: '10px' }}>
+              {searchTerm ? 'No Orders Found' : 'No Orders Found'}
+            </h3>
+            <p style={{ color: '#95a5a6' }}>
+              {searchTerm 
+                ? `No orders found matching "${searchTerm}". Try a different search term.`
+                : 'Orders will appear here once email processing begins.'
+              }
+            </p>
+            {searchTerm && (
+              <button 
+                className="btn btn-secondary" 
+                onClick={handleClearSearch}
+                style={{ marginTop: '10px' }}
+              >
+                Clear Search
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -258,7 +352,7 @@ const Orders: React.FC = () => {
           <div className="card-header">
             <h2 className="card-title">
               <FileText size={20} style={{ marginRight: '10px', verticalAlign: 'middle' }} />
-              Order History ({orders.length} orders)
+              Order History {searchTerm && `(Search: "${searchTerm}")`}
             </h2>
           </div>
           <div className="card-body" style={{ padding: '0' }}>

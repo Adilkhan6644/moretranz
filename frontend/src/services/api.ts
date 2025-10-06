@@ -42,7 +42,10 @@ api.interceptors.response.use(
       setAuthToken(null);
       // Soft redirect without importing router (works in SPA)
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/login') {
+          window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+        }
       }
     }
     return Promise.reject(err);
@@ -147,8 +150,13 @@ export const apiService = {
   },
 
   // Orders
-  async getAllOrders() {
-    const response = await api.get('/orders/');
+  async getAllOrders(search?: string, skip: number = 0, limit: number = 100) {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    params.append('skip', skip.toString());
+    params.append('limit', limit.toString());
+    
+    const response = await api.get(`/orders/?${params.toString()}`);
     return response;
   },
 
