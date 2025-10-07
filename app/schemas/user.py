@@ -1,8 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
 class UserBase(BaseModel):
-    username: str  # email
+    email: EmailStr
     full_name: str | None = None
 
 

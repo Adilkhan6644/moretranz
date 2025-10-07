@@ -94,10 +94,10 @@ export interface PrintJob {
 
 export const apiService = {
   // Auth
-  async login(username: string, password: string) {
+  async login(email: string, password: string) {
     const form = new URLSearchParams();
     form.append('grant_type', 'password');
-    form.append('username', username);
+    form.append('username', email);
     form.append('password', password);
     const response = await api.post('/auth/login', form.toString(), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -111,8 +111,8 @@ export const apiService = {
     setAuthToken(null);
   },
 
-  async register(username: string, password: string, fullName?: string) {
-    const response = await api.post('/auth/register', { username, password, full_name: fullName });
+  async register(email: string, password: string, fullName?: string) {
+    const response = await api.post('/auth/register', { email, password, full_name: fullName });
     return response;
   },
 
@@ -186,6 +186,16 @@ export const apiService = {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  },
+
+  async printAttachment(attachmentId: number) {
+    const response = await api.post(`/orders/attachments/${attachmentId}/print`);
+    return response;
+  },
+
+  async printOrderAttachments(orderId: number) {
+    const response = await api.post(`/orders/${orderId}/print-attachments`);
+    return response;
   },
 
   // Printer Configuration (if needed)

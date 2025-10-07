@@ -181,6 +181,80 @@ async def stop_processing(_: User = Depends(get_current_user)):
     await email_scheduler.stop_processing()
     return {"status": "Email processing stopped"}
 
+@router.post("/{order_id}/print-attachments")
+async def print_order_attachments(
+    order_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
+):
+    """Manually print all attachments for an order"""
+    from app.services.printer_service import PrinterService
+    
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    attachments = db.query(Attachment).filter(Attachment.order_id == order_id).all()
+    if not attachments:
+        return {"status": "No attachments found for this order"}
+    
+    printer_service = PrinterService()
+    print_results = []
+    
+    for attachment in attachments:
+        try:
+            success = await printer_service.print_file(attachment)
+            print_results.append({
+                "attachment_id": attachment.id,
+                "file_name": attachment.file_name,
+                "print_status": "success" if success else "failed"
+            })
+        except Exception as e:
+            print_results.append({
+                "attachment_id": attachment.id,
+                "file_name": attachment.file_name,
+                "print_status": "error",
+                "error": str(e)
+            })
+    
+    return {
+        "status": "Print job completed",
+        "order_id": order_id,
+        "po_number": order.po_number,
+        "results": print_results
+    }
+
+@router.post("/attachments/{attachment_id}/print")
+async def print_attachment(
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
+):
+    """Manually print a specific attachment"""
+    from app.services.printer_service import PrinterService
+    
+    attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    
+    printer_service = PrinterService()
+    
+    try:
+        success = await printer_service.print_file(attachment)
+        return {
+            "status": "success" if success else "failed",
+            "attachment_id": attachment_id,
+            "file_name": attachment.file_name,
+            "message": "Print job sent successfully" if success else "Print job failed"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "attachment_id": attachment_id,
+            "file_name": attachment.file_name,
+            "error": str(e)
+        }
+
 async def broadcast_status_update(status_data: dict):
     """Broadcast status update to all connected WebSocket clients"""
     try:

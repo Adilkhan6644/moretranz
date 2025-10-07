@@ -17,7 +17,7 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,9 +32,9 @@ const Login: React.FC = () => {
     setError(null);
     try {
       if (mode === 'signup') {
-        await apiService.register(username, password, fullName);
+        await apiService.register(email, password, fullName);
       }
-      await apiService.login(username, password);
+      await apiService.login(email, password);
       navigate(from, { replace: true });
     } catch (err) {
       setError(mode === 'signup' ? 'Sign up failed' : 'Invalid credentials');
@@ -62,7 +62,7 @@ const Login: React.FC = () => {
           )}
           <div className="form-group" style={{ marginBottom: 12 }}>
             <label style={labelStyle}>Email</label>
-            <input style={inputStyle} value={username} onChange={(e) => setUsername(e.target.value)} placeholder="your@email.com" required />
+            <input style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" required />
           </div>
           <div className="form-group" style={{ marginBottom: 6 }}>
             <label style={labelStyle}>Password</label>

@@ -14,7 +14,8 @@ import {
   Play,
   Square,
   Search,
-  X
+  X,
+  Printer
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import websocketService, { OrderData } from '../services/websocket';
@@ -62,6 +63,8 @@ const Orders: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [printingOrders, setPrintingOrders] = useState<Set<number>>(new Set());
+  const [printingAttachments, setPrintingAttachments] = useState<Set<number>>(new Set());
   
   const ITEMS_PER_PAGE = 10;
 
@@ -196,6 +199,48 @@ const Orders: React.FC = () => {
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage);
     fetchOrders(searchTerm, newPage);
+  };
+
+  const handlePrintOrder = async (orderId: number) => {
+    setPrintingOrders(prev => new Set(prev).add(orderId));
+    try {
+      const response = await apiService.printOrderAttachments(orderId);
+      if (response.data.status === 'Print job completed') {
+        alert(`Print job sent for order ${response.data.po_number}`);
+      } else {
+        alert('Print job failed');
+      }
+    } catch (err) {
+      alert('Failed to print attachments');
+      console.error('Print error:', err);
+    } finally {
+      setPrintingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
+  };
+
+  const handlePrintAttachment = async (attachmentId: number) => {
+    setPrintingAttachments(prev => new Set(prev).add(attachmentId));
+    try {
+      const response = await apiService.printAttachment(attachmentId);
+      if (response.data.status === 'success') {
+        alert(`Print job sent for ${response.data.file_name}`);
+      } else {
+        alert(`Print job failed: ${response.data.message || 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert('Failed to print attachment');
+      console.error('Print error:', err);
+    } finally {
+      setPrintingAttachments(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(attachmentId);
+        return newSet;
+      });
+    }
   };
 
 
@@ -386,22 +431,37 @@ const Orders: React.FC = () => {
                       </div>
                     </td>
                     <td>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => handleViewOrder(order)}
-                        style={{ marginRight: '5px', padding: '5px 10px', fontSize: '12px' }}
-                      >
-                        <Eye size={14} style={{ marginRight: '4px' }} />
-                        View
-                      </button>
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => handleDeleteClick(order)}
-                        style={{ padding: '5px 10px', fontSize: '12px' }}
-                      >
-                        <Trash2 size={14} style={{ marginRight: '4px' }} />
-                        Delete
-                      </button>
+                      <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => handleViewOrder(order)}
+                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                        >
+                          <Eye size={14} style={{ marginRight: '4px' }} />
+                          View
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handlePrintOrder(order.id)}
+                          disabled={printingOrders.has(order.id)}
+                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                        >
+                          {printingOrders.has(order.id) ? (
+                            <Loader2 size={14} className="animate-spin" style={{ marginRight: '4px' }} />
+                          ) : (
+                            <Printer size={14} style={{ marginRight: '4px' }} />
+                          )}
+                          {printingOrders.has(order.id) ? 'Printing...' : 'Print All'}
+                        </button>
+                        <button
+                          className="btn btn-danger"
+                          onClick={() => handleDeleteClick(order)}
+                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                        >
+                          <Trash2 size={14} style={{ marginRight: '4px' }} />
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -436,13 +496,28 @@ const Orders: React.FC = () => {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ color: '#2c3e50' }}>Order Details - {selectedOrder.po_number}</h2>
-              <button
-                className="btn btn-secondary"
-                onClick={() => setSelectedOrder(null)}
-                style={{ padding: '5px 10px' }}
-              >
-                Close
-              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => handlePrintOrder(selectedOrder.id)}
+                  disabled={printingOrders.has(selectedOrder.id)}
+                  style={{ padding: '5px 10px' }}
+                >
+                  {printingOrders.has(selectedOrder.id) ? (
+                    <Loader2 size={16} className="animate-spin" style={{ marginRight: '4px' }} />
+                  ) : (
+                    <Printer size={16} style={{ marginRight: '4px' }} />
+                  )}
+                  {printingOrders.has(selectedOrder.id) ? 'Printing...' : 'Print All'}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setSelectedOrder(null)}
+                  style={{ padding: '5px 10px' }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="row">
@@ -543,7 +618,7 @@ const Orders: React.FC = () => {
                           #{attachment.sheet_number}
                         </td>
                         <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
+                          <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                             <button
                               className="btn btn-primary"
                               onClick={() => handleDownloadFile(attachment.id, 'pdf')}
@@ -559,6 +634,19 @@ const Orders: React.FC = () => {
                             >
                               <Download size={14} style={{ marginRight: '4px' }} />
                               Original
+                            </button>
+                            <button
+                              className="btn btn-info"
+                              onClick={() => handlePrintAttachment(attachment.id)}
+                              disabled={printingAttachments.has(attachment.id)}
+                              style={{ padding: '5px 10px', fontSize: '12px' }}
+                            >
+                              {printingAttachments.has(attachment.id) ? (
+                                <Loader2 size={14} className="animate-spin" style={{ marginRight: '4px' }} />
+                              ) : (
+                                <Printer size={14} style={{ marginRight: '4px' }} />
+                              )}
+                              {printingAttachments.has(attachment.id) ? 'Printing...' : 'Print'}
                             </button>
                           </div>
                         </td>

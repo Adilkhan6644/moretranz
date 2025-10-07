@@ -22,9 +22,14 @@ class PrinterService:
             file_type = attachment.file_type.lower()
             
             if file_type in ['pdf', 'png', 'jpg', 'jpeg']:
-                # In Docker, skip actual printing (no printer access)
+                # In Docker, simulate printing (no printer access)
                 if self.is_docker:
-                    print(f"📄 Docker mode: Skipping print for {file_path} (printers not available in container)")
+                    print(f"🖨️ PRINT SIMULATION: Sending {file_path} to printer")
+                    print(f"   📄 File: {attachment.file_name}")
+                    print(f"   🏷️ Type: {file_type.upper()}")
+                    print(f"   📏 Size: {os.path.getsize(file_path) if os.path.exists(file_path) else 'Unknown'} bytes")
+                    print(f"   🖨️ Printer: {'Attachment Printer' if self.is_label_file(file_path) else 'Body Printer'}")
+                    print(f"   ✅ Print job simulated successfully!")
                     return True  # Return True to not block processing
                 
                 printer_name = (settings.ATTACHMENT_PRINTER 
