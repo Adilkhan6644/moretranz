@@ -144,6 +144,8 @@ export interface EmailConfig {
   allowed_senders: string;
   max_age_days: number;
   sleep_time: number;
+  auto_download_enabled: boolean;
+  download_path?: string;
 }
 
 export interface Order {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Mail, Shield, Clock, Users, CheckCircle2, XCircle } from 'lucide-react';
+import { Save, RefreshCw, Mail, Shield, Clock, Users, CheckCircle2, XCircle, Download, FolderOpen } from 'lucide-react';
 import { apiService } from '../services/api';
 
 interface EmailConfig {
@@ -9,16 +9,20 @@ interface EmailConfig {
   allowed_senders: string;
   max_age_days: number;
   sleep_time: number;
+  auto_download_enabled: boolean;
+  download_path?: string;
 }
 
-const EmailConfig: React.FC = () => {
+const Config: React.FC = () => {
   const [config, setConfig] = useState<EmailConfig>({
     email_address: '',
     email_password: '',
     imap_server: 'imap.gmail.com',
     allowed_senders: '',
     max_age_days: 10,
-    sleep_time: 5
+    sleep_time: 5,
+    auto_download_enabled: false,
+    download_path: ''
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -93,22 +97,128 @@ const EmailConfig: React.FC = () => {
     }
   };
 
-  const handleInputChange = (field: keyof EmailConfig, value: string | number) => {
+  const handleInputChange = (field: keyof EmailConfig, value: string | number | boolean) => {
     setConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSelectPath = () => {
+    // For web browsers, we can't directly access the file system for security reasons
+    // We'll use a more user-friendly modal instead of the basic prompt
+    const currentPath = config.download_path || 'C:\\Downloads\\MoreTranz\\Attachments';
+    
+    // Create a more sophisticated dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    `;
+    
+    dialog.innerHTML = `
+      <div style="
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        max-width: 500px;
+        width: 90%;
+        font-family: Arial, sans-serif;
+      ">
+        <h3 style="margin-top: 0; color: #333;">📁 Set Download Path</h3>
+        <p style="color: #666; margin-bottom: 20px;">
+          Enter the folder path where attachments will be saved:
+        </p>
+        <input type="text" id="pathInput" value="${currentPath}" style="
+          width: 100%;
+          padding: 12px;
+          border: 2px solid #ddd;
+          border-radius: 5px;
+          font-size: 14px;
+          margin-bottom: 15px;
+        " />
+        <div style="margin-bottom: 15px;">
+          <strong>Examples:</strong><br/>
+          • <code>C:\\Downloads\\MoreTranz\\Attachments</code><br/>
+          • <code>D:\\MyFiles\\Orders</code><br/>
+          • <code>/home/user/downloads</code>
+        </div>
+        <div style="text-align: right;">
+          <button id="cancelBtn" style="
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 10px 20px;
+            margin-right: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+          ">Cancel</button>
+          <button id="okBtn" style="
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+          ">OK</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    const pathInput = dialog.querySelector('#pathInput') as HTMLInputElement;
+    const okBtn = dialog.querySelector('#okBtn') as HTMLButtonElement;
+    const cancelBtn = dialog.querySelector('#cancelBtn') as HTMLButtonElement;
+    
+    pathInput.focus();
+    pathInput.select();
+    
+    const cleanup = () => {
+      document.body.removeChild(dialog);
+    };
+    
+    okBtn.onclick = () => {
+      const newPath = pathInput.value.trim();
+      if (newPath) {
+        setConfig(prev => ({ ...prev, download_path: newPath }));
+      }
+      cleanup();
+    };
+    
+    cancelBtn.onclick = cleanup;
+    
+    // Close on escape key
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        cleanup();
+        document.removeEventListener('keydown', handleKeyPress);
+      } else if (e.key === 'Enter') {
+        okBtn.click();
+        document.removeEventListener('keydown', handleKeyPress);
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyPress);
   };
 
   if (loading) {
     return (
       <div className="loading">
         <RefreshCw size={24} />
-        <p>Loading email configuration...</p>
+        <p>Loading configuration...</p>
       </div>
     );
   }
 
   return (
     <div>
-      <h1 style={{ marginBottom: '30px', color: '#2c3e50' }}>Email Configuration</h1>
+      <h1 style={{ marginBottom: '30px', color: '#2c3e50' }}>Configuration</h1>
       
       {error && (
         <div className="alert alert-error">
@@ -238,6 +348,75 @@ const EmailConfig: React.FC = () => {
               </div>
             </div>
 
+            {/* Auto-Download Settings */}
+            <div className="row">
+              <div className="col-12">
+                <div style={{ 
+                  border: '1px solid #e9ecef', 
+                  borderRadius: '8px', 
+                  padding: '20px', 
+                  marginTop: '20px',
+                  backgroundColor: '#f8f9fa'
+                }}>
+                  <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50', fontSize: '18px' }}>
+                    <Download size={20} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                    Auto-Download Settings
+                  </h3>
+                  
+                  <div className="form-group" style={{ marginBottom: '15px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="checkbox"
+                        id="auto_download_enabled"
+                        checked={config.auto_download_enabled}
+                        onChange={(e) => handleInputChange('auto_download_enabled', e.target.checked)}
+                        style={{ marginRight: '10px', transform: 'scale(1.2)' }}
+                      />
+                      <label htmlFor="auto_download_enabled" style={{ margin: 0, cursor: 'pointer' }}>
+                        Automatically download attachments to local PC
+                      </label>
+                    </div>
+                    <small style={{ color: '#7f8c8d', fontSize: '12px', marginLeft: '30px' }}>
+                      When enabled, all processed attachments will be automatically saved to the specified folder
+                    </small>
+                  </div>
+
+                  {config.auto_download_enabled && (
+                    <div className="form-group">
+                      <label className="form-label">
+                        <FolderOpen size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                        Download Path
+                      </label>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={config.download_path || ''}
+                          onChange={(e) => handleInputChange('download_path', e.target.value)}
+                          placeholder="C:\Downloads\MoreTranz\Attachments"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          onClick={handleSelectPath}
+                          style={{ whiteSpace: 'nowrap' }}
+                        >
+                          <FolderOpen size={16} style={{ marginRight: '5px' }} />
+                          Set Path
+                        </button>
+                      </div>
+                      <small style={{ color: '#7f8c8d', fontSize: '12px' }}>
+                        Enter the full path to a folder where attachments will be automatically saved.<br/>
+                        <strong>Note:</strong> Web browsers cannot open file explorer for security reasons.<br/>
+                        <strong>Tip:</strong> You can copy the path from Windows Explorer by right-clicking in the address bar.
+                      </small>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Validation Result */}
             {validationResult && (
               <div 
@@ -320,4 +499,4 @@ const EmailConfig: React.FC = () => {
   );
 };
 
-export default EmailConfig;
+export default Config;

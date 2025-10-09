@@ -75,6 +75,9 @@ class EmailConfig(Base):
     allowed_senders = Column(Text)  # Stored as comma-separated string
     max_age_days = Column(Integer)
     sleep_time = Column(Integer)
+    # Auto-download settings
+    auto_download_enabled = Column(Boolean, default=False)
+    download_path = Column(String(500), nullable=True)  # Path where files should be saved
     last_updated = Column(DateTime, default=datetime.utcnow)
 
 class PrinterConfig(Base):
@@ -85,3 +88,4 @@ class PrinterConfig(Base):
     printer_type = Column(String(50))  # body or attachment
     is_active = Column(Integer, default=1)
     last_updated = Column(DateTime, default=datetime.utcnow)
+    

@@ -20,6 +20,7 @@ from urllib.parse import urlparse, unquote
 from app.core.config import settings
 from app.models.order import Order, Attachment, ProcessingLog, PrintJob, EmailConfig as EmailConfigModel
 from app.services.printer_service import PrinterService
+from app.services.file_downloader import file_downloader
 from app.websocket_manager import manager
 
 # Order type mapping - maps human-readable names to internal format
@@ -760,6 +761,10 @@ class EmailProcessor:
                         # Print attachment
                         await self.printer_service.print_file(attachment)
                         
+                        # Auto-download attachment if enabled
+                        if file_downloader.is_auto_download_enabled():
+                            await file_downloader.download_attachment(attachment)
+                        
                     except Exception as e:
                         print(f"❌ Failed to process attachment: {str(e)}")
                         self.log_to_db("Attachment Processing", "failed", str(e), order.id)
@@ -850,6 +855,10 @@ class EmailProcessor:
                         
                         # Print the downloaded file
                         await self.printer_service.print_file(attachment)
+                        
+                        # Auto-download attachment if enabled
+                        if file_downloader.is_auto_download_enabled():
+                            await file_downloader.download_attachment(attachment)
                     else:
                         print(f"❌ Failed to download file from URL")
                         self.log_to_db("URL Download", "failed", f"Failed to download: {url}", order.id)
@@ -939,6 +948,10 @@ class EmailProcessor:
             
             # Print email body PDF
             await self.printer_service.print_file(email_attachment)
+            
+            # Auto-download email body PDF if enabled
+            if file_downloader.is_auto_download_enabled():
+                await file_downloader.download_attachment(email_attachment)
             
         except Exception as e:
             print(f"❌ Failed to create email body PDF: {str(e)}")

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from app.db.session import get_db
 from app.schemas.order import EmailConfig, PrinterConfig
 from app.models.order import EmailConfig as EmailConfigModel
@@ -20,6 +20,8 @@ class EmailConfigUpdate(BaseModel):
     allowed_senders: str
     max_age_days: int = 10
     sleep_time: int = 5
+    auto_download_enabled: bool = False
+    download_path: Optional[str] = None
 
 class EmailConfigResponse(BaseModel):
     email_address: str
@@ -27,6 +29,8 @@ class EmailConfigResponse(BaseModel):
     allowed_senders: str
     max_age_days: int
     sleep_time: int
+    auto_download_enabled: bool
+    download_path: Optional[str]
 
 class EmailValidationRequest(BaseModel):
     email_address: str
@@ -47,14 +51,18 @@ def get_email_config(db: Session = Depends(get_db), _: User = Depends(get_curren
             "imap_server": "imap.gmail.com",
             "allowed_senders": "",
             "max_age_days": 10,
-            "sleep_time": 5
+            "sleep_time": 5,
+            "auto_download_enabled": False,
+            "download_path": None
         }
     return {
         "email_address": config.email_address,
         "imap_server": config.imap_server,
         "allowed_senders": config.allowed_senders,
         "max_age_days": config.max_age_days,
-        "sleep_time": config.sleep_time
+        "sleep_time": config.sleep_time,
+        "auto_download_enabled": config.auto_download_enabled or False,
+        "download_path": config.download_path
     }
 
 @router.put("/email")
@@ -73,7 +81,9 @@ def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db)
             imap_server=config.imap_server,
             allowed_senders=config.allowed_senders,
             max_age_days=config.max_age_days,
-            sleep_time=config.sleep_time
+            sleep_time=config.sleep_time,
+            auto_download_enabled=config.auto_download_enabled,
+            download_path=config.download_path
         )
         db.add(db_config)
     else:
@@ -84,6 +94,8 @@ def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db)
         db_config.allowed_senders = config.allowed_senders
         db_config.max_age_days = config.max_age_days
         db_config.sleep_time = config.sleep_time
+        db_config.auto_download_enabled = config.auto_download_enabled
+        db_config.download_path = config.download_path
     
     db.commit()
     

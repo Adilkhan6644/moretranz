@@ -1,13 +1,12 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import orders, config, auth
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
 from app.websocket_manager import manager
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Import endpoints (models will be imported automatically)
+from app.api.endpoints import orders, config, auth
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

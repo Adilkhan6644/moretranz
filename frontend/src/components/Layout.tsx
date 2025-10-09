@@ -20,7 +20,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home },
     { path: '/orders', label: 'Orders', icon: FileText },
-    { path: '/email-config', label: 'Email Config', icon: Mail },
+    { path: '/email-config', label: 'Config', icon: Mail },
   ];
 
   return (

@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Dashboard from './pages/Dashboard';
-import EmailConfig from './pages/EmailConfig';
+import Config from './pages/EmailConfig';
 import Orders from './pages/Orders';
 import Login from './pages/Login';
 import './App.css';
@@ -26,7 +26,7 @@ function App() {
           } />
           <Route path="/email-config" element={
             <ProtectedRoute>
-              <EmailConfig />
+              <Config />
             </ProtectedRoute>
           } />
         </Routes>

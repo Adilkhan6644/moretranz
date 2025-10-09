@@ -61,6 +61,8 @@ class EmailConfigBase(BaseModel):
     allowed_senders: str
     max_age_days: int
     sleep_time: int
+    auto_download_enabled: bool = False
+    download_path: Optional[str] = None
 
 class EmailConfigCreate(EmailConfigBase):
     pass
