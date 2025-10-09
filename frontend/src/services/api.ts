@@ -11,6 +11,7 @@ const api = axios.create({
 
 // --- Auth token helpers ---
 const TOKEN_KEY = 'auth_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
 
 export function setAuthToken(token: string | null) {
   if (token) {
@@ -24,6 +25,23 @@ export function getAuthToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+export function setRefreshToken(token: string | null) {
+  if (token) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+  }
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function clearAllTokens() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
 // Attach token to requests
 api.interceptors.request.use((config) => {
   const token = getAuthToken();
@@ -34,20 +52,87 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect to login on 401
+// Handle token refresh and automatic logout
+let isRefreshing = false;
+let failedQueue: Array<{resolve: Function, reject: Function}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token);
+    }
+  });
+  
+  failedQueue = [];
+};
+
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err?.response?.status === 401) {
-      setAuthToken(null);
-      // Soft redirect without importing router (works in SPA)
-      if (typeof window !== 'undefined') {
-        const currentPath = window.location.pathname;
-        if (currentPath !== '/login') {
-          window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+  async (err) => {
+    const originalRequest = err.config;
+    
+    if (err?.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // If already refreshing, queue this request
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers['Authorization'] = 'Bearer ' + token;
+          return api(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      const refreshToken = getRefreshToken();
+      if (refreshToken) {
+        try {
+          const response = await api.post('/auth/refresh', {
+            refresh_token: refreshToken
+          });
+          
+          const { access_token, refresh_token: new_refresh_token } = response.data;
+          setAuthToken(access_token);
+          setRefreshToken(new_refresh_token);
+          
+          processQueue(null, access_token);
+          
+          // Retry original request with new token
+          originalRequest.headers['Authorization'] = 'Bearer ' + access_token;
+          return api(originalRequest);
+        } catch (refreshError) {
+          // Refresh failed, logout user
+          clearAllTokens();
+          processQueue(refreshError, null);
+          
+          if (typeof window !== 'undefined') {
+            const currentPath = window.location.pathname;
+            if (currentPath !== '/login') {
+              window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+            }
+          }
+          return Promise.reject(refreshError);
+        } finally {
+          isRefreshing = false;
+        }
+      } else {
+        // No refresh token, logout user
+        clearAllTokens();
+        
+        if (typeof window !== 'undefined') {
+          const currentPath = window.location.pathname;
+          if (currentPath !== '/login') {
+            window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+          }
         }
       }
     }
+    
     return Promise.reject(err);
   }
 );
@@ -102,13 +187,24 @@ export const apiService = {
     const response = await api.post('/auth/login', form.toString(), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
-    const token = response.data?.access_token as string | undefined;
-    if (token) setAuthToken(token);
+    
+    const { access_token, refresh_token } = response.data;
+    if (access_token) setAuthToken(access_token);
+    if (refresh_token) setRefreshToken(refresh_token);
+    
     return response;
   },
 
-  logout() {
-    setAuthToken(null);
+  async logout() {
+    try {
+      // Call logout endpoint to clear refresh token on server
+      await api.post('/auth/logout');
+    } catch (error) {
+      // Even if server logout fails, clear local tokens
+      console.warn('Server logout failed, clearing local tokens');
+    } finally {
+      clearAllTokens();
+    }
   },
 
   async register(email: string, password: string, fullName?: string) {
