@@ -164,13 +164,51 @@ async def start_processing(
     if email_scheduler.is_running:
         return {"status": "Email processing is already running"}
     
-    # Get sleep time from email config
+    # Get email config and validate credentials
     from app.models.order import EmailConfig as EmailConfigModel
     email_config = db.query(EmailConfigModel).first()
-    sleep_time = email_config.sleep_time if email_config else 5
     
+    if not email_config:
+        raise HTTPException(
+            status_code=400, 
+            detail="Email configuration not found. Please configure email settings first."
+        )
+    
+    if not email_config.email_address or not email_config.email_password:
+        raise HTTPException(
+            status_code=400,
+            detail="Email credentials not configured. Please set up email address and password."
+        )
+    
+    # Validate credentials before starting
+    import imaplib
+    try:
+        mail = imaplib.IMAP4_SSL(email_config.imap_server)
+        mail.login(email_config.email_address, email_config.email_password)
+        mail.select('INBOX')
+        mail.close()
+        mail.logout()
+    except imaplib.IMAP4.error as e:
+        error_msg = str(e).replace('b\'', '').replace('\'', '')
+        if "AUTHENTICATIONFAILED" in error_msg:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid email credentials. Please check your email settings and ensure you're using an App Password for Gmail."
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Email connection failed: {error_msg}"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to validate email credentials: {str(e)}"
+        )
+    
+    sleep_time = email_config.sleep_time
     await email_scheduler.start_processing(sleep_time)
-    return {"status": "Email processing started"}
+    return {"status": "Email processing started successfully"}
 
 @router.post("/stop-processing")
 async def stop_processing(_: User = Depends(get_current_user)):

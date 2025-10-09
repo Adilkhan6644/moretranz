@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.api.endpoints.auth import get_current_user
 from app.models.user import User
+import imaplib
 
 router = APIRouter()
 
@@ -26,6 +27,15 @@ class EmailConfigResponse(BaseModel):
     allowed_senders: str
     max_age_days: int
     sleep_time: int
+
+class EmailValidationRequest(BaseModel):
+    email_address: str
+    email_password: str
+    imap_server: str = "imap.gmail.com"
+
+class EmailValidationResponse(BaseModel):
+    valid: bool
+    message: str
 
 @router.get("/email", response_model=EmailConfigResponse)
 def get_email_config(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
@@ -82,6 +92,46 @@ def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db)
         email_scheduler.update_interval(config.sleep_time)
     
     return {"status": "Email configuration updated successfully"}
+
+@router.post("/email/validate", response_model=EmailValidationResponse)
+def validate_email_credentials(validation: EmailValidationRequest, _: User = Depends(get_current_user)):
+    """Validate email credentials before saving"""
+    try:
+        # Connect to IMAP server
+        mail = imaplib.IMAP4_SSL(validation.imap_server)
+        
+        # Try to login with provided credentials
+        mail.login(validation.email_address, validation.email_password)
+        
+        # Test accessing inbox
+        mail.select('INBOX')
+        
+        # Close connection
+        mail.close()
+        mail.logout()
+        
+        return {
+            "valid": True,
+            "message": "Email credentials are valid"
+        }
+        
+    except imaplib.IMAP4.error as e:
+        error_msg = str(e).replace('b\'', '').replace('\'', '')
+        if "AUTHENTICATIONFAILED" in error_msg:
+            return {
+                "valid": False,
+                "message": "Invalid email or password. Please check your credentials and ensure you're using an App Password for Gmail."
+            }
+        else:
+            return {
+                "valid": False,
+                "message": f"Email connection failed: {error_msg}"
+            }
+    except Exception as e:
+        return {
+            "valid": False,
+            "message": f"Unexpected error: {str(e)}"
+        }
 
 @router.get("/printers", response_model=List[PrinterConfig])
 def get_printer_configs(db: Session = Depends(get_db), _: User = Depends(get_current_user)):

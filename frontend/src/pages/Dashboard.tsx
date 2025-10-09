@@ -10,7 +10,6 @@ interface DashboardStats {
   failedOrders: number;
   isProcessing: boolean;
 }
-
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats>({
     totalOrders: 0,
@@ -116,7 +115,9 @@ const Dashboard: React.FC = () => {
   const handleStartProcessing = async () => {
     try {
       setProcessingAction('start');
-      await apiService.startProcessing();
+      setError(null); // Clear any previous errors
+      
+      const response = await apiService.startProcessing();
       
       // Connect WebSocket immediately after starting
       websocketService.connect();
@@ -126,13 +127,24 @@ const Dashboard: React.FC = () => {
         fetchDashboardData();
         setProcessingAction(null);
       }, 1000);
-    } catch (err) {
-      setError('Failed to start processing');
+    } catch (err: any) {
+      // Extract error message from API response
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Failed to start processing';
+      setError(errorMessage);
       setProcessingAction(null);
       websocketService.disconnect(); // Ensure WebSocket is disconnected on error
     }
   };
-
+  interface handleStopProcessingProps {
+    className:string;
+    disabled:boolean;
+    style:React.CSSProperties;
+    onClick:() => void;
+    children:React.ReactNode;
+    onMouseEnter:() => void;
+    onMouseLeave:() => void;
+    onMouseDown:() => void;
+  }
   const handleStopProcessing = async () => {
     try {
       setProcessingAction('stop');

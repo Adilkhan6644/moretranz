@@ -127,6 +127,15 @@ export const apiService = {
     return response;
   },
 
+  async validateEmailCredentials(email: string, password: string, imapServer: string = 'imap.gmail.com') {
+    const response = await api.post('/config/email/validate', {
+      email_address: email,
+      email_password: password,
+      imap_server: imapServer
+    });
+    return response;
+  },
+
   // Order Processing
   async startProcessing() {
     const response = await api.post('/orders/start-processing');

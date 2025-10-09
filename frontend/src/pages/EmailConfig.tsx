@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Mail, Shield, Clock, Users } from 'lucide-react';
+import { Save, RefreshCw, Mail, Shield, Clock, Users, CheckCircle2, XCircle } from 'lucide-react';
 import { apiService } from '../services/api';
 
 interface EmailConfig {
@@ -22,8 +22,10 @@ const EmailConfig: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [validating, setValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [validationResult, setValidationResult] = useState<{valid: boolean, message: string} | null>(null);
 
   useEffect(() => {
     fetchConfig();
@@ -42,6 +44,36 @@ const EmailConfig: React.FC = () => {
     }
   };
 
+  const handleValidateCredentials = async () => {
+    if (!config.email_address || !config.email_password) {
+      setValidationResult({
+        valid: false,
+        message: 'Please enter both email address and password'
+      });
+      return;
+    }
+
+    setValidating(true);
+    setValidationResult(null);
+
+    try {
+      const response = await apiService.validateEmailCredentials(
+        config.email_address,
+        config.email_password,
+        config.imap_server
+      );
+      setValidationResult(response.data);
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.message || 'Failed to validate credentials';
+      setValidationResult({
+        valid: false,
+        message: errorMessage
+      });
+    } finally {
+      setValidating(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -51,8 +83,10 @@ const EmailConfig: React.FC = () => {
     try {
       await apiService.updateEmailConfig(config);
       setSuccess('Email configuration saved successfully!');
-    } catch (err) {
-      setError('Failed to save email configuration');
+      setValidationResult(null); // Clear validation result after successful save
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.detail || 'Failed to save email configuration';
+      setError(errorMessage);
       console.error('Config save error:', err);
     } finally {
       setSaving(false);
@@ -204,6 +238,23 @@ const EmailConfig: React.FC = () => {
               </div>
             </div>
 
+            {/* Validation Result */}
+            {validationResult && (
+              <div 
+                className={`alert ${validationResult.valid ? 'alert-success' : 'alert-error'}`}
+                style={{ marginTop: '20px' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  {validationResult.valid ? (
+                    <CheckCircle2 size={16} style={{ marginRight: '8px' }} />
+                  ) : (
+                    <XCircle size={16} style={{ marginRight: '8px' }} />
+                  )}
+                  {validationResult.message}
+                </div>
+              </div>
+            )}
+
             <div style={{ marginTop: '30px', textAlign: 'right' }}>
               <button
                 type="button"
@@ -213,6 +264,16 @@ const EmailConfig: React.FC = () => {
               >
                 <RefreshCw size={16} style={{ marginRight: '8px' }} />
                 Reset
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={handleValidateCredentials}
+                disabled={validating || !config.email_address || !config.email_password}
+                style={{ marginRight: '10px' }}
+              >
+                <Shield size={16} style={{ marginRight: '8px' }} />
+                {validating ? 'Validating...' : 'Test Credentials'}
               </button>
               <button
                 type="submit"
