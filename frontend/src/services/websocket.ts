@@ -43,7 +43,7 @@ class WebSocketService {
       this.ws = null;
     }
 
-    const wsUrl = `ws://localhost:8000/ws`;
+    const wsUrl = `ws://localhost:81/ws`;
     console.log('🔌 Connecting to WebSocket:', wsUrl);
     
     this.ws = new WebSocket(wsUrl);

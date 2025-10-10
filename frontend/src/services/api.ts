@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = 'http://localhost:81/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -283,16 +283,42 @@ export const apiService = {
   },
 
   async downloadAttachment(attachmentId: number, format: 'pdf' | 'original' = 'pdf') {
-    // Create a direct download link
-    const downloadUrl = `${API_BASE_URL}/orders/attachments/${attachmentId}/download?format=${format}`;
-    
-    // Create a temporary link element and trigger download
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = ''; // Let the server determine the filename
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      // Use authenticated request to get the file
+      const response = await api.get(`/orders/attachments/${attachmentId}/download?format=${format}`, {
+        responseType: 'blob' // Important for file downloads
+      });
+      
+      // Create blob URL and trigger download
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      
+      // Get filename from response headers or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `attachment_${attachmentId}.${format === 'pdf' ? 'pdf' : 'file'}`;
+      
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      // Create temporary link and trigger download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Download failed:', error);
+      throw error;
+    }
   },
 
   async printAttachment(attachmentId: number) {

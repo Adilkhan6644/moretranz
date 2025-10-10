@@ -261,8 +261,13 @@ const Orders: React.FC = () => {
     }
   };
 
-  const handleDownloadFile = (attachmentId: number, format: 'pdf' | 'original' = 'pdf') => {
-    apiService.downloadAttachment(attachmentId, format);
+  const handleDownloadFile = async (attachmentId: number, format: 'pdf' | 'original' = 'pdf') => {
+    try {
+      await apiService.downloadAttachment(attachmentId, format);
+    } catch (error) {
+      console.error('Download failed:', error);
+      setError('Failed to download attachment. Please try again.');
+    }
   };
 
   const handleDeleteClick = (order: Order) => {
