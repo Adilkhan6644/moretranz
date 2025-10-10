@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     libx11-6 \
     libxext6 \
     libxrender1 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Install wkhtmltopdf from official source
@@ -37,8 +38,12 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p logs attachments
 
+# Copy startup script
+COPY startup.sh /app/startup.sh
+RUN chmod +x /app/startup.sh
+
 # Expose port
 EXPOSE 8000
 
 # Command to run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["/app/startup.sh"]
