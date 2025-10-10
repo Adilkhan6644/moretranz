@@ -408,7 +408,6 @@ const Config: React.FC = () => {
                       </div>
                       <small style={{ color: '#7f8c8d', fontSize: '12px' }}>
                         Enter the full path to a folder where attachments will be automatically saved.<br/>
-                        <strong>Note:</strong> Web browsers cannot open file explorer for security reasons.<br/>
                         <strong>Tip:</strong> You can copy the path from Windows Explorer by right-clicking in the address bar.
                       </small>
                     </div>
