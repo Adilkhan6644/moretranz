@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import os
 from app.db.session import get_db
 from app.schemas.order import EmailConfig, PrinterConfig
 from app.models.order import EmailConfig as EmailConfigModel
@@ -72,6 +73,7 @@ def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db)
     
     db_config = db.query(EmailConfigModel).first()
     old_sleep_time = db_config.sleep_time if db_config else 5
+    old_download_path = db_config.download_path if db_config else None
     
     if not db_config:
         # Create new config if none exists
@@ -102,6 +104,15 @@ def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db)
     # Update scheduler interval if it changed and scheduler is running
     if email_scheduler.is_running and old_sleep_time != config.sleep_time:
         email_scheduler.update_interval(config.sleep_time)
+    
+    # Check if download path changed and we're in Docker
+    if (old_download_path != config.download_path and 
+        config.download_path and 
+        os.path.exists('/.dockerenv')):
+        print(f"⚠️ Download path changed from '{old_download_path}' to '{config.download_path}'")
+        print("⚠️ Please restart Docker containers to apply the new download path")
+        print("⚠️ Run: python auto_update_path.py")
+        print("⚠️ Or run: docker-compose down && docker-compose up -d")
     
     return {"status": "Email configuration updated successfully"}
 

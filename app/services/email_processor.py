@@ -261,14 +261,21 @@ async def download_file_from_url(url: str, save_path: str, timeout: int = 60) ->
         True if successful, False otherwise
     """
     try:
-        print(f"📥 Downloading from URL: {url}")
+        # Clean the URL by removing problematic characters
+        import re
+        # Remove zero-width characters and other problematic unicode
+        cleaned_url = re.sub(r'[\u200B-\u200D\uFEFF\u2060]', '', url).strip()
+        
+        print(f"📥 Downloading from URL: {cleaned_url}")
+        if cleaned_url != url:
+            print(f"🔧 URL cleaned (removed problematic characters)")
         
         # Make the request with a user agent to avoid blocking
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        response = requests.get(url, headers=headers, timeout=timeout, stream=True)
+        response = requests.get(cleaned_url, headers=headers, timeout=timeout, stream=True)
         response.raise_for_status()  # Raise exception for bad status codes
         
         # Save the file
@@ -719,29 +726,18 @@ class EmailProcessor:
                                 sheet_number = int(num_match.group(1)) if num_match else 1
                                 break
 
-                        # Convert to PDF if it's an image
+                        # Keep files as-is, no PDF conversion for email attachments
                         pdf_file_path = None
                         file_extension = filename.split('.')[-1].lower()
                         
-                        if file_extension in ['png', 'jpg', 'jpeg', 'gif', 'bmp']:
-                            # Convert image to 4x6 PDF label
-                            pdf_filename = f"{filename.rsplit('.', 1)[0]}_label.pdf"
-                            pdf_file_path = os.path.join(order.folder_path, pdf_filename)
-                            
-                            print(f"🔄 Converting image to PDF: {pdf_file_path}")
-                            if convert_image_to_4x6_pdf(original_file_path, pdf_file_path):
-                                print(f"✅ PDF conversion successful")
-                            else:
-                                print(f"❌ PDF conversion failed, keeping original file")
-                                pdf_file_path = original_file_path
-                        elif file_extension == 'pdf':
+                        if file_extension == 'pdf':
                             # Already a PDF, use as-is
                             pdf_file_path = original_file_path
                             print(f"✅ File is already PDF format")
                         else:
-                            # Unknown format, keep original
-                            pdf_file_path = original_file_path
-                            print(f"⚠️ Unknown file format, keeping original")
+                            # For non-PDF files, don't create PDF version
+                            pdf_file_path = None
+                            print(f"✅ Keeping file as-is: {original_file_path}")
 
                         # Save attachment record
                         attachment = Attachment(
@@ -821,22 +817,14 @@ class EmailProcessor:
                         # Determine file type
                         file_extension = base_filename.split('.')[-1].lower()
                         
-                        # Convert to PDF if it's an image
+                        # Keep files as-is, no PDF conversion for downloaded images
                         pdf_file_path = None
-                        if file_extension in ['png', 'jpg', 'jpeg', 'gif', 'bmp']:
-                            pdf_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}_label.pdf"
-                            pdf_file_path = os.path.join(order.folder_path, pdf_filename)
-                            
-                            print(f"🔄 Converting downloaded image to PDF: {pdf_file_path}")
-                            if convert_image_to_4x6_pdf(file_path, pdf_file_path):
-                                print(f"✅ PDF conversion successful")
-                            else:
-                                print(f"❌ PDF conversion failed, keeping original file")
-                                pdf_file_path = file_path
-                        elif file_extension == 'pdf':
+                        if file_extension == 'pdf':
                             pdf_file_path = file_path
                         else:
-                            pdf_file_path = file_path
+                            # For non-PDF files, don't create PDF version
+                            pdf_file_path = None
+                            print(f"✅ Downloaded file as-is: {file_path}")
                         
                         # Save attachment record
                         attachment = Attachment(

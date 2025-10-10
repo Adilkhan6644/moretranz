@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 from typing import List, Optional
 import os
 from dotenv import load_dotenv
-from pydantic import field_validator
+from pydantic import field_validator, Field
 
 load_dotenv()
 
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     
     # CORS Configuration
-    ALLOWED_ORIGINS: List[str] = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else []
+    ALLOWED_ORIGINS: List[str] = Field(default_factory=list)
 
     class Config:
         case_sensitive = True
