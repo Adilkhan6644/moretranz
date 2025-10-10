@@ -29,14 +29,14 @@ services:
       ALLOWED_SENDERS: ${ALLOWED_SENDERS:-""}
       EMAIL_PROCESSING_ENABLED: ${EMAIL_PROCESSING_ENABLED:-false}
     ports:
-      - "8000:8000"
+      - "81:8000"
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./attachments:/app/attachments
       - ./logs:/app/logs
-      - D:/application:/app/downloads
+      - ./application:/app/downloads
     restart: unless-stopped
 
   # React Frontend
