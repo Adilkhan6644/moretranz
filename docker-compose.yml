@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -36,7 +34,7 @@ services:
     volumes:
       - ./attachments:/app/attachments
       - ./logs:/app/logs
-      - C:/downloads:/app/downloads
+      - ./downloads:/app/downloads
     restart: unless-stopped
 
   # React Frontend
