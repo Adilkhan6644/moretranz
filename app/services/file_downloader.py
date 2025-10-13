@@ -29,18 +29,15 @@ class FileDownloader:
                 print("Download path is not configured")
                 return False
             
-            # Use the configured download path
-            # In Docker: always use /app/downloads (mapped to ./downloads on host)
-            # Then copy to the user's configured path
-            container_download_dir = Path('/app/downloads')
+            # Use the configured download path directly
+            # Ensure we're using C:\downloads and not saving in project directory
+            download_dir = Path(email_config.download_path)
             
             # Log the configured path for reference
             print(f"📁 Configured download path: {email_config.download_path}")
-            print(f"📁 Container download directory: {container_download_dir}")
+            print(f"📁 Download directory: {download_dir}")
             
-            # Create the download directory in container
-            download_dir = container_download_dir
-            
+            # Create the download directory
             download_dir.mkdir(parents=True, exist_ok=True)
             
             # Create subdirectory for this order
@@ -57,24 +54,11 @@ class FileDownloader:
             # Destination file path
             dest_path = order_dir / attachment.file_name
             
-            # Copy file
+            # Copy file directly to the configured path
             shutil.copy2(source_path, dest_path)
             
             print(f"✅ Auto-downloaded: {attachment.file_name} to {dest_path}")
             
-            # Also copy to user's configured path if different
-            if email_config.download_path and email_config.download_path != str(container_download_dir):
-                try:
-                    user_download_dir = Path(email_config.download_path)
-                    user_order_dir = user_download_dir / f"Order_{attachment.order.po_number}"
-                    user_order_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    user_dest_path = user_order_dir / attachment.file_name
-                    shutil.copy2(source_path, user_dest_path)
-                    
-                    print(f"✅ Also copied to user path: {user_dest_path}")
-                except Exception as e:
-                    print(f"⚠️ Failed to copy to user path: {str(e)}")
             
             return True
             

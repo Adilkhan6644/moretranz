@@ -30,7 +30,6 @@ class Settings(BaseSettings):
     MAX_EMAIL_AGE_DAYS: int = 10
     
     # File Storage
-    ATTACHMENTS_FOLDER: str = "attachments"
     PROCESSED_EMAILS_FILE: str = "logs/processed_emails.txt"
     
     # Processing Configuration

@@ -47,7 +47,7 @@ def update_download_path(new_path: str):
 def main():
     if len(sys.argv) != 2:
         print("Usage: python update_download_path.py <path>")
-        print("Example: python update_download_path.py D:/application")
+        print("Example: python update_download_path.py C:/downloads")
         sys.exit(1)
     
     new_path = sys.argv[1]

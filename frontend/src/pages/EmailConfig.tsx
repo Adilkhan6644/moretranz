@@ -104,7 +104,7 @@ const Config: React.FC = () => {
   const handleSelectPath = () => {
     // For web browsers, we can't directly access the file system for security reasons
     // We'll use a more user-friendly modal instead of the basic prompt
-    const currentPath = config.download_path || 'C:\\Downloads\\MoreTranz\\Attachments';
+    const currentPath = config.download_path || 'C:\\downloads';
     
     // Create a more sophisticated dialog
     const dialog = document.createElement('div');
@@ -145,7 +145,7 @@ const Config: React.FC = () => {
         " />
         <div style="margin-bottom: 15px;">
           <strong>Examples:</strong><br/>
-          • <code>C:\\Downloads\\MoreTranz\\Attachments</code><br/>
+          • <code>C:\\downloads</code><br/>
           • <code>D:\\MyFiles\\Orders</code><br/>
           • <code>/home/user/downloads</code>
         </div>
@@ -393,7 +393,7 @@ const Config: React.FC = () => {
                           className="form-control"
                           value={config.download_path || ''}
                           onChange={(e) => handleInputChange('download_path', e.target.value)}
-                          placeholder="C:\Downloads\MoreTranz\Attachments"
+                          placeholder="C:\downloads"
                           style={{ flex: 1 }}
                         />
                         <button

@@ -32,9 +32,8 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ./attachments:/app/attachments
       - ./logs:/app/logs
-      - ./downloads:/app/downloads
+      - C:/downloads:/app/downloads
     restart: unless-stopped
 
   # React Frontend

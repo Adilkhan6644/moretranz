@@ -438,6 +438,7 @@ class EmailProcessor:
         self.mail = None
         self.printer_service = PrinterService()
         self.is_running = False
+        self.download_path = "C:\\downloads"  # Default download path
 
     def log_to_db(self, action: str, status: str, error_message: Optional[str] = None, order_id: Optional[int] = None):
         """Log actions to database"""
@@ -527,6 +528,16 @@ class EmailProcessor:
         PASSWORD = email_config.email_password
         ALLOWED_SENDER = email_config.allowed_senders.split(',')[0] if email_config.allowed_senders else None
         POLL_INTERVAL = email_config.sleep_time
+        
+        # Get download path from email config and store as instance variable
+        if email_config and email_config.download_path:
+            self.download_path = email_config.download_path
+        else:
+            # Fallback to C:\downloads if no config
+            self.download_path = "C:\\downloads"
+        
+        # Update all existing orders to use the new download path
+        self.update_all_orders_folder_path()
 
         try:
             print(f"\n🔄 EmailProcessor.monitor_emails() started with is_running={self.is_running}")
@@ -601,12 +612,16 @@ class EmailProcessor:
                                 existing_order = self.db.query(Order).filter(Order.po_number == order_details['po_number']).first()
                                 
                                 if existing_order:
-                                    print(f"⚠️ Order with PO number {order_details['po_number']} already exists (ID: {existing_order.id}). Skipping duplicate.")
+                                    print(f"⚠️ Order with PO number {order_details['po_number']} already exists (ID: {existing_order.id}). Updating folder path.")
+                                    # Update the existing order's folder path to use the new download path
+                                    existing_order.folder_path = os.path.join(self.download_path, f"Order_{order_details['po_number']}")
+                                    self.db.commit()
+                                    order = existing_order
                                     continue
 
-                                # Create folder
+                                # Create folder using cached download path
                                 sanitized_customer_name = sanitize_folder_name(order_details['customer_name'])
-                                folder_path = os.path.join(settings.ATTACHMENTS_FOLDER, f"{order_details['po_number']}_{sanitized_customer_name}")
+                                folder_path = os.path.join(self.download_path, f"Order_{order_details['po_number']}")
                                 os.makedirs(folder_path, exist_ok=True)
                                 print(f"📁 Created folder: {folder_path}")
 
@@ -622,6 +637,9 @@ class EmailProcessor:
                                     status="processing",
                                     folder_path=folder_path
                                 )
+                                
+                                # Override folder_path to ensure it uses the new download path
+                                order.folder_path = folder_path
                                 print("💾 Saving order to database...")
                                 try:
                                     self.db.add(order)
@@ -663,6 +681,7 @@ class EmailProcessor:
                                 self.db.commit()
                                 print(f"✅ Order {order_details['po_number']} processed successfully")
                                 
+                                
                                 # Broadcast order completion via WebSocket
                                 await self.broadcast_order_update(order)
 
@@ -702,11 +721,18 @@ class EmailProcessor:
     
 
     async def process_attachments(self, email_msg: email.message.Message, order: Order):
+        # Force the order to use the new download path, ignore database value
+        order.folder_path = os.path.join(self.download_path, f"Order_{order.po_number}")
+        os.makedirs(order.folder_path, exist_ok=True)
+        
         for part in email_msg.walk():
             if part.get_content_disposition() == 'attachment':
                 filename = part.get_filename()
                 if filename:
-                    original_file_path = os.path.join(order.folder_path, filename)
+                    # Use current download path instead of stored folder_path
+                    order_folder = os.path.join(self.download_path, f"Order_{order.po_number}")
+                    os.makedirs(order_folder, exist_ok=True)
+                    original_file_path = os.path.join(order_folder, filename)
                     print(f"\n📎 Processing attachment: {filename}")
                     
                     # Save original file
@@ -766,6 +792,9 @@ class EmailProcessor:
                         self.log_to_db("Attachment Processing", "failed", str(e), order.id)
 
     async def process_download_urls(self, email_msg: email.message.Message, order: Order):
+        # Force the order to use the new download path, ignore database value
+        order.folder_path = os.path.join(self.download_path, f"Order_{order.po_number}")
+        os.makedirs(order.folder_path, exist_ok=True)
         """Process download URLs from email body HTML"""
         try:
             # Extract HTML body
@@ -805,11 +834,14 @@ class EmailProcessor:
                     base_filename = get_filename_from_url(url, f"{internal_type}_sheet_{sheet_number}")
                     
                     # Ensure unique filename
-                    file_path = os.path.join(order.folder_path, base_filename)
+                    # Use current download path instead of stored folder_path
+                    order_folder = os.path.join(self.download_path, f"Order_{order.po_number}")
+                    os.makedirs(order_folder, exist_ok=True)
+                    file_path = os.path.join(order_folder, base_filename)
                     counter = 1
                     while os.path.exists(file_path):
                         name, ext = os.path.splitext(base_filename)
-                        file_path = os.path.join(order.folder_path, f"{name}_{counter}{ext}")
+                        file_path = os.path.join(order_folder, f"{name}_{counter}{ext}")
                         counter += 1
                     
                     # Download the file
@@ -859,6 +891,9 @@ class EmailProcessor:
             self.log_to_db("URL Processing", "failed", str(e), order.id)
 
     async def create_email_body_pdf(self, email_msg: email.message.Message, order: Order, email_body: str):
+        # Force the order to use the new download path, ignore database value
+        order.folder_path = os.path.join(self.download_path, f"Order_{order.po_number}")
+        os.makedirs(order.folder_path, exist_ok=True)
         """Create PDF from email body content"""
         try:
             # Create HTML file from email body
@@ -896,7 +931,10 @@ class EmailProcessor:
             
             # Save HTML file
             html_filename = f"{order.po_number}_email_body.html"
-            html_file_path = os.path.join(order.folder_path, html_filename)
+            # Use current download path instead of stored folder_path
+            order_folder = os.path.join(self.download_path, f"Order_{order.po_number}")
+            os.makedirs(order_folder, exist_ok=True)
+            html_file_path = os.path.join(order_folder, html_filename)
             
             with open(html_file_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
@@ -904,7 +942,7 @@ class EmailProcessor:
             
             # Convert HTML to PDF
             pdf_filename = f"{order.po_number}_email_body.pdf"
-            pdf_file_path = os.path.join(order.folder_path, pdf_filename)
+            pdf_file_path = os.path.join(order_folder, pdf_filename)
             
             print(f"🔄 Converting email body to PDF: {pdf_file_path}")
             
@@ -992,3 +1030,29 @@ class EmailProcessor:
             print(f"📡 Broadcasted order update: {order.po_number} - {order.status}")
         except Exception as e:
             print(f"❌ Failed to broadcast order update: {str(e)}")
+    
+    def update_all_orders_folder_path(self):
+        """Update all existing orders to use the new download path"""
+        try:
+            orders = self.db.query(Order).all()
+            updated_count = 0
+            
+            for order in orders:
+                old_path = order.folder_path
+                new_path = os.path.join(self.download_path, f"Order_{order.po_number}")
+                
+                if old_path != new_path:
+                    order.folder_path = new_path
+                    updated_count += 1
+                    print(f"🔄 Updated order {order.po_number}: {old_path} -> {new_path}")
+            
+            if updated_count > 0:
+                self.db.commit()
+                print(f"✅ Updated {updated_count} orders to use new download path")
+            else:
+                print("ℹ️ No orders needed folder path updates")
+                
+        except Exception as e:
+            print(f"❌ Error updating orders folder paths: {str(e)}")
+            self.db.rollback()
+    

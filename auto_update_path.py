@@ -28,7 +28,7 @@ def get_current_download_path():
 
 def get_docker_download_path():
     """Get the current Docker download path from environment"""
-    return os.environ.get('DOWNLOAD_PATH', './downloads')
+    return os.environ.get('DOWNLOAD_PATH', 'C:/downloads')
 
 def update_docker_path(new_path):
     """Update Docker containers with new download path"""
