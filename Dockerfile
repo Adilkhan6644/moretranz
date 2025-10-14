@@ -38,12 +38,9 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p logs attachments
 
-# Copy startup script
-COPY startup.sh /app/startup.sh
-RUN chmod +x /app/startup.sh
-
 # Expose port
 EXPOSE 8000
 
 # Command to run the application
-CMD ["/app/startup.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
