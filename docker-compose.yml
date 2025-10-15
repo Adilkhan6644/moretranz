@@ -44,7 +44,10 @@ services:
 
   # React Frontend
   frontend:
-    build: ./frontend
+    build: 
+      context: ./frontend
+      args:
+        REACT_APP_API_URL: http://74.208.173.203:8000/api/v1
     ports:
       - "3000:3000"
     depends_on:

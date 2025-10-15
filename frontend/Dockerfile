@@ -13,7 +13,9 @@ RUN npm ci --only=production
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the application with environment variables
+ARG REACT_APP_API_URL=http://74.208.173.203:8000/api/v1
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
 RUN npm run build
 
 # Install serve to run the production build
