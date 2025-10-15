@@ -22,7 +22,7 @@ RUN npm run build
 EXPOSE 3000
 
 # Create a simple server script
-RUN echo 'const express = require("express"); const path = require("path"); const app = express(); app.use(express.static(path.join(__dirname, "build"))); app.get("*", (req, res) => { res.sendFile(path.join(__dirname, "build", "index.html")); }); app.listen(3000, "0.0.0.0", () => { console.log("Server running on http://0.0.0.0:3000"); });' > server.js
+RUN echo 'const express = require("express"); const path = require("path"); const app = express(); app.use(express.static(path.join(__dirname, "build"))); app.get("/*", (req, res) => { res.sendFile(path.join(__dirname, "build", "index.html")); }); app.listen(3000, "0.0.0.0", () => { console.log("Server running on http://0.0.0.0:3000"); });' > server.js
 
 # Install express for the server
 RUN npm install express
