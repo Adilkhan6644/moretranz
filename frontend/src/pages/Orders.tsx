@@ -92,6 +92,21 @@ const Orders: React.FC = () => {
     
     init();
     
+    // Handle page visibility change (when user returns from login page)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Page became visible, refetch data in case user was redirected to login
+        fetchOrders();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+    
     // Listen for WebSocket connection status
     websocketService.onConnect(() => {
       console.log('🔌 WebSocket connected in Orders');
@@ -108,12 +123,8 @@ const Orders: React.FC = () => {
       console.log('📊 Status update received in Orders:', status);
       setIsProcessing(status.is_processing);
       
-      // Connect or disconnect WebSocket based on status
-      if (status.is_processing) {
-        websocketService.connect();
-      } else {
-        websocketService.disconnect();
-      }
+      // Don't reconnect WebSocket here - it's already connected and receiving updates
+      // The WebSocket connection should persist regardless of processing status
     });
     
     // Set up WebSocket listener for new orders
@@ -261,8 +272,14 @@ const Orders: React.FC = () => {
     }
   };
 
-  const handleDownloadFile = (attachmentId: number, format: 'pdf' | 'original' = 'pdf') => {
-    apiService.downloadAttachment(attachmentId, format);
+  const handleDownloadFile = async (attachmentId: number, format: 'pdf' | 'original' = 'pdf', fileType?: string) => {
+    try {
+      await apiService.downloadAttachment(attachmentId, format, fileType);
+    } catch (error: any) {
+      console.error('Download failed:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Download failed';
+      setError(errorMessage);
+    }
   };
 
   const handleDeleteClick = (order: Order) => {
@@ -619,17 +636,20 @@ const Orders: React.FC = () => {
                         </td>
                         <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                           <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                            <button
-                              className="btn btn-primary"
-                              onClick={() => handleDownloadFile(attachment.id, 'pdf')}
-                              style={{ padding: '5px 10px', fontSize: '12px' }}
-                            >
-                              <Download size={14} style={{ marginRight: '4px' }} />
-                              PDF
-                            </button>
+                            {/* Only show PDF button for files that can be converted to PDF (not PNG) */}
+                            {attachment.file_type !== 'png' && (
+                              <button
+                                className="btn btn-primary"
+                                onClick={() => handleDownloadFile(attachment.id, 'pdf')}
+                                style={{ padding: '5px 10px', fontSize: '12px' }}
+                              >
+                                <Download size={14} style={{ marginRight: '4px' }} />
+                                PDF
+                              </button>
+                            )}
                             <button
                               className="btn btn-secondary"
-                              onClick={() => handleDownloadFile(attachment.id, 'original')}
+                              onClick={() => handleDownloadFile(attachment.id, 'original', attachment.file_type)}
                               style={{ padding: '5px 10px', fontSize: '12px' }}
                             >
                               <Download size={14} style={{ marginRight: '4px' }} />

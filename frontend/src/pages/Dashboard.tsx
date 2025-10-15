@@ -44,6 +44,21 @@ const Dashboard: React.FC = () => {
     
     init();
     
+    // Handle page visibility change (when user returns from login page)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Page became visible, refetch data in case user was redirected to login
+        fetchDashboardData();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+    
     // Set up WebSocket listeners
     const handleNewOrder = (order: OrderData) => {
       console.log('📦 New order received via WebSocket:', order);
@@ -58,12 +73,8 @@ const Dashboard: React.FC = () => {
         isProcessing: status.is_processing
       }));
       
-      // Connect or disconnect WebSocket based on processing status
-      if (status.is_processing) {
-        websocketService.connect();
-      } else {
-        websocketService.disconnect();
-      }
+      // Don't reconnect WebSocket here - it's already connected and receiving updates
+      // The WebSocket connection should persist regardless of processing status
     };
 
     websocketService.onNewOrder(handleNewOrder);
@@ -122,11 +133,9 @@ const Dashboard: React.FC = () => {
       // Connect WebSocket immediately after starting
       websocketService.connect();
       
-      // Give the background task a moment to start before checking status
-      setTimeout(() => {
-        fetchDashboardData();
-        setProcessingAction(null);
-      }, 1000);
+      // Update local state immediately instead of making another API call
+      setStats(prev => ({ ...prev, isProcessing: true }));
+      setProcessingAction(null);
     } catch (err: any) {
       // Extract error message from API response
       const errorMessage = err?.response?.data?.detail || err?.message || 'Failed to start processing';
@@ -153,11 +162,9 @@ const Dashboard: React.FC = () => {
       // Disconnect WebSocket immediately after stopping
       websocketService.disconnect();
       
-      // Give the stop command a moment to take effect before checking status
-      setTimeout(() => {
-        fetchDashboardData();
-        setProcessingAction(null);
-      }, 1000);
+      // Update local state immediately instead of making another API call
+      setStats(prev => ({ ...prev, isProcessing: false }));
+      setProcessingAction(null);
     } catch (err) {
       setError('Failed to stop processing');
       setProcessingAction(null);

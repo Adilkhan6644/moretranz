@@ -128,7 +128,11 @@ def download_attachment(
         file_name = os.path.splitext(attachment.file_name)[0] + '.pdf'
     else:
         file_path = attachment.file_path
+        # For original files, ensure we use the original filename with proper extension
         file_name = attachment.file_name
+        # If the stored filename doesn't have an extension, add one based on file_type
+        if not os.path.splitext(file_name)[1] and attachment.file_type:
+            file_name = f"{os.path.splitext(file_name)[0]}.{attachment.file_type}"
     
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on server")

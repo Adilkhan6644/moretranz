@@ -28,6 +28,7 @@ class WebSocketService {
   private listeners: Map<string, Function[]> = new Map();
   private connectListeners: Function[] = [];
   private disconnectListeners: Function[] = [];
+  private connectionRequested = false;
 
   connect(): void {
     // If already connected or connecting, don't create a new connection
@@ -35,6 +36,14 @@ class WebSocketService {
       console.log('⚠️ WebSocket already connected or connecting');
       return;
     }
+
+    // If connection was already requested, don't create another one
+    if (this.connectionRequested) {
+      console.log('⚠️ WebSocket connection already requested');
+      return;
+    }
+
+    this.connectionRequested = true;
 
     // If there's an existing socket in any other state, close it first
     if (this.ws) {
@@ -51,6 +60,7 @@ class WebSocketService {
     this.ws.onopen = () => {
       console.log('✅ WebSocket connected');
       this.reconnectAttempts = 0;
+      this.connectionRequested = false; // Reset the flag on successful connection
       this.connectListeners.forEach(listener => listener());
     };
 
@@ -66,6 +76,7 @@ class WebSocketService {
 
     this.ws.onclose = () => {
       console.log('🔌 WebSocket disconnected');
+      this.connectionRequested = false; // Reset the flag on disconnect
       this.disconnectListeners.forEach(listener => listener());
       this.attemptReconnect();
     };
@@ -102,6 +113,7 @@ class WebSocketService {
       
       // Clear reconnection state
       this.reconnectAttempts = 0;
+      this.connectionRequested = false;
       
       console.log('🔌 WebSocket disconnected and cleaned up');
     }
