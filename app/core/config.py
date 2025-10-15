@@ -37,12 +37,12 @@ class Settings(BaseSettings):
     
     # File storage settings
     MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", "50"))  # 50MB max file size
-    ALLOWED_FILE_TYPES: List[str] = os.getenv("ALLOWED_FILE_TYPES", "pdf,png,jpg,jpeg,gif,bmp,txt,html").split(",")
+    ALLOWED_FILE_TYPES: str = os.getenv("ALLOWED_FILE_TYPES", "pdf,png,jpg,jpeg,gif,bmp,txt,html")
     
     @property
     def allowed_file_types_list(self) -> List[str]:
         """Convert ALLOWED_FILE_TYPES string to list"""
-        return [ext.strip().lower() for ext in self.ALLOWED_FILE_TYPES if ext.strip()]
+        return [ext.strip().lower() for ext in self.ALLOWED_FILE_TYPES.split(",") if ext.strip()]
     
     # Processing Configuration
     SLEEP_TIME: int = 5
