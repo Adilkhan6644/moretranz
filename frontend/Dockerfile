@@ -18,14 +18,11 @@ ARG REACT_APP_API_URL=http://74.208.173.203:8000/api/v1
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
 RUN npm run build
 
+# Install serve to run the production build
+RUN npm install -g serve
+
 # Expose port
 EXPOSE 3000
 
-# Create a simple server script
-RUN echo 'const express = require("express"); const path = require("path"); const app = express(); app.use(express.static(path.join(__dirname, "build"))); app.get("/*", (req, res) => { res.sendFile(path.join(__dirname, "build", "index.html")); }); app.listen(3000, "0.0.0.0", () => { console.log("Server running on http://0.0.0.0:3000"); });' > server.js
-
-# Install express for the server
-RUN npm install express
-
-# Command to run the custom server
-CMD ["node", "server.js"]
+# Command to serve the production build
+CMD ["serve", "-s", "build", "-l", "3000"]
