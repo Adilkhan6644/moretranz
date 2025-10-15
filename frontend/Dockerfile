@@ -24,9 +24,5 @@ RUN npm install -g serve
 # Expose port
 EXPOSE 3000
 
-# Set environment variable to bind to all interfaces
-ENV HOST=0.0.0.0
-ENV PORT=3000
-
 # Command to serve the production build
-CMD ["serve", "-s", "build", "-l", "3000"]
+CMD ["npx", "serve", "-s", "build", "-l", "3000", "--host", "0.0.0.0"]
