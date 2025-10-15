@@ -18,6 +18,7 @@ import requests
 from urllib.parse import urlparse, unquote
 
 from app.core.config import settings
+from app.services.storage_service import storage_service
 from app.models.order import Order, Attachment, ProcessingLog, PrintJob, EmailConfig as EmailConfigModel
 from app.services.printer_service import PrinterService
 from app.websocket_manager import manager
@@ -698,12 +699,16 @@ class EmailProcessor:
             if part.get_content_disposition() == 'attachment':
                 filename = part.get_filename()
                 if filename:
-                    original_file_path = os.path.join(order.folder_path, filename)
                     print(f"\n📎 Processing attachment: {filename}")
                     
-                    # Save original file
-                    with open(original_file_path, 'wb') as f:
-                        f.write(part.get_payload(decode=True))
+                    # Save original file using storage service
+                    file_content = part.get_payload(decode=True)
+                    original_file_path = storage_service.save_file(filename, file_content, order.id)
+                    
+                    if not original_file_path:
+                        print(f"❌ Failed to save original file: {filename}")
+                        continue
+                    
                     print(f"✅ Saved original file: {original_file_path}")
 
                     try:
@@ -725,11 +730,23 @@ class EmailProcessor:
                         if file_extension in ['png', 'jpg', 'jpeg', 'gif', 'bmp']:
                             # Convert image to 4x6 PDF label
                             pdf_filename = f"{filename.rsplit('.', 1)[0]}_label.pdf"
-                            pdf_file_path = os.path.join(order.folder_path, pdf_filename)
+                            temp_pdf_path = os.path.join("/tmp", pdf_filename)  # Use temp directory for conversion
                             
-                            print(f"🔄 Converting image to PDF: {pdf_file_path}")
-                            if convert_image_to_4x6_pdf(original_file_path, pdf_file_path):
-                                print(f"✅ PDF conversion successful")
+                            print(f"🔄 Converting image to PDF: {pdf_filename}")
+                            if convert_image_to_4x6_pdf(original_file_path, temp_pdf_path):
+                                # Read the converted PDF and save it using storage service
+                                with open(temp_pdf_path, 'rb') as f:
+                                    pdf_content = f.read()
+                                pdf_file_path = storage_service.save_file(pdf_filename, pdf_content, order.id)
+                                
+                                # Clean up temp file
+                                os.remove(temp_pdf_path)
+                                
+                                if pdf_file_path:
+                                    print(f"✅ PDF conversion and save successful")
+                                else:
+                                    print(f"❌ PDF save failed, keeping original file")
+                                    pdf_file_path = original_file_path
                             else:
                                 print(f"❌ PDF conversion failed, keeping original file")
                                 pdf_file_path = original_file_path
@@ -811,33 +828,58 @@ class EmailProcessor:
                         file_path = os.path.join(order.folder_path, f"{name}_{counter}{ext}")
                         counter += 1
                     
-                    # Download the file
-                    if await download_file_from_url(url, file_path):
+                    # Download the file to a temporary location first
+                    temp_file_path = os.path.join("/tmp", base_filename)
+                    if await download_file_from_url(url, temp_file_path):
+                        # Read the downloaded file content
+                        with open(temp_file_path, 'rb') as f:
+                            file_content = f.read()
+                        
+                        # Save using storage service
+                        saved_file_path = storage_service.save_file(base_filename, file_content, order.id)
+                        
+                        # Clean up temp file
+                        os.remove(temp_file_path)
+                        
+                        if not saved_file_path:
+                            print(f"❌ Failed to save downloaded file: {base_filename}")
+                            continue
+                        
                         # Determine file type
                         file_extension = base_filename.split('.')[-1].lower()
                         
                         # Convert to PDF if it's an image
                         pdf_file_path = None
                         if file_extension in ['png', 'jpg', 'jpeg', 'gif', 'bmp']:
-                            pdf_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}_label.pdf"
-                            pdf_file_path = os.path.join(order.folder_path, pdf_filename)
+                            pdf_filename = f"{os.path.splitext(base_filename)[0]}_label.pdf"
+                            temp_pdf_path = os.path.join("/tmp", pdf_filename)
                             
-                            print(f"🔄 Converting downloaded image to PDF: {pdf_file_path}")
-                            if convert_image_to_4x6_pdf(file_path, pdf_file_path):
-                                print(f"✅ PDF conversion successful")
+                            print(f"🔄 Converting downloaded image to PDF: {pdf_filename}")
+                            if convert_image_to_4x6_pdf(saved_file_path, temp_pdf_path):
+                                # Read the converted PDF and save it using storage service
+                                with open(temp_pdf_path, 'rb') as f:
+                                    pdf_content = f.read()
+                                pdf_file_path = storage_service.save_file(pdf_filename, pdf_content, order.id)
+                                
+                                # Clean up temp file
+                                os.remove(temp_pdf_path)
+                                
+                                if not pdf_file_path:
+                                    print(f"❌ PDF save failed, keeping original file")
+                                    pdf_file_path = saved_file_path
                             else:
                                 print(f"❌ PDF conversion failed, keeping original file")
-                                pdf_file_path = file_path
+                                pdf_file_path = saved_file_path
                         elif file_extension == 'pdf':
-                            pdf_file_path = file_path
+                            pdf_file_path = saved_file_path
                         else:
-                            pdf_file_path = file_path
+                            pdf_file_path = saved_file_path
                         
                         # Save attachment record
                         attachment = Attachment(
                             order_id=order.id,
-                            file_name=os.path.basename(file_path),
-                            file_path=file_path,
+                            file_name=os.path.basename(saved_file_path),
+                            file_path=saved_file_path,
                             pdf_path=pdf_file_path if pdf_file_path and pdf_file_path.endswith('.pdf') else None,
                             file_type=file_extension,
                             print_status="pending",

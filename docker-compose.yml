@@ -28,14 +28,20 @@ services:
       IMAP_SERVER: ${IMAP_SERVER:-imap.gmail.com}
       ALLOWED_SENDERS: ${ALLOWED_SENDERS:-""}
       EMAIL_PROCESSING_ENABLED: ${EMAIL_PROCESSING_ENABLED:-false}
+      # Storage Configuration
+      ATTACHMENTS_FOLDER: /data/attachments
+      LOGS_FOLDER: /data/logs
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
+      ALLOWED_FILE_TYPES: ${ALLOWED_FILE_TYPES:-pdf,png,jpg,jpeg,gif,bmp,txt,html}
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - ./attachments:/app/attachments
-      - ./logs:/app/logs
+      - /data/moretranz/attachments:/data/attachments
+      - /data/moretranz/logs:/data/logs
+      - /tmp:/tmp  # For temporary file operations
     restart: unless-stopped
 
   # React Frontend

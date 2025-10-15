@@ -29,9 +29,20 @@ class Settings(BaseSettings):
         return [s.strip() for s in self.ALLOWED_SENDERS.split(",") if s.strip()]
     MAX_EMAIL_AGE_DAYS: int = 10
     
-    # File Storage
-    ATTACHMENTS_FOLDER: str = "attachments"
-    PROCESSED_EMAILS_FILE: str = "logs/processed_emails.txt"
+    # File Storage Configuration
+    # Use environment variables for production flexibility
+    ATTACHMENTS_FOLDER: str = os.getenv("ATTACHMENTS_FOLDER", "/data/attachments")
+    LOGS_FOLDER: str = os.getenv("LOGS_FOLDER", "/data/logs")
+    PROCESSED_EMAILS_FILE: str = os.getenv("PROCESSED_EMAILS_FILE", "/data/logs/processed_emails.txt")
+    
+    # File storage settings
+    MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", "50"))  # 50MB max file size
+    ALLOWED_FILE_TYPES: List[str] = os.getenv("ALLOWED_FILE_TYPES", "pdf,png,jpg,jpeg,gif,bmp,txt,html").split(",")
+    
+    @property
+    def allowed_file_types_list(self) -> List[str]:
+        """Convert ALLOWED_FILE_TYPES string to list"""
+        return [ext.strip().lower() for ext in self.ALLOWED_FILE_TYPES if ext.strip()]
     
     # Processing Configuration
     SLEEP_TIME: int = 5
