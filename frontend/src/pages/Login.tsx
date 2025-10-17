@@ -32,12 +32,35 @@ const Login: React.FC = () => {
     setError(null);
     try {
       if (mode === 'signup') {
-        await apiService.register(email, password, fullName);
+        try {
+          await apiService.register(email, password, fullName);
+          console.log('Registration successful');
+        } catch (registerErr: any) {
+          console.error('Registration error:', registerErr);
+          console.error('Error response:', registerErr.response);
+          console.error('Error data:', registerErr.response?.data);
+          
+          if (registerErr.response?.status === 400 && registerErr.response?.data?.detail === 'Email already registered') {
+            setError('This email is already registered. Please sign in instead.');
+          } else if (registerErr.response?.status === 422) {
+            setError('Invalid data provided. Please check your email format and try again.');
+          } else {
+            setError('Sign up failed. Please try again.');
+          }
+          return;
+        }
       }
-      await apiService.login(email, password);
-      navigate(from, { replace: true });
-    } catch (err) {
-      setError(mode === 'signup' ? 'Sign up failed' : 'Invalid credentials');
+      
+      try {
+        await apiService.login(email, password);
+        navigate(from, { replace: true });
+      } catch (loginErr: any) {
+        console.error('Login error:', loginErr);
+        setError(mode === 'signup' ? 'Account created but login failed. Please try signing in.' : 'Invalid credentials');
+      }
+    } catch (err: any) {
+      console.error('Unexpected error:', err);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }

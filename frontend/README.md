@@ -1,6 +1,6 @@
-# Getting Started with Create React App
+# MoreTranz Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This is the frontend application for the MoreTranz Order Processing System, built with React.
 
 ## Available Scripts
 

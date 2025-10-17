@@ -2,6 +2,7 @@ services:
   # PostgreSQL Database
   db:
     image: postgres:15-alpine
+    container_name: moretranz-db
     environment:
       POSTGRES_DB: moretranz_db
       POSTGRES_USER: moretranz_user
@@ -18,7 +19,10 @@ services:
 
   # FastAPI Backend
   backend:
-    build: .
+    build:
+      context: .
+    container_name: moretranz-backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     environment:
       DATABASE_URL: postgresql://moretranz_user:moretranz_password@db:5432/moretranz_db
       EMAIL_ADDRESS: ${EMAIL_ADDRESS:-}
@@ -26,7 +30,6 @@ services:
       IMAP_SERVER: ${IMAP_SERVER:-imap.gmail.com}
       ALLOWED_SENDERS: ${ALLOWED_SENDERS:-""}
       EMAIL_PROCESSING_ENABLED: ${EMAIL_PROCESSING_ENABLED:-false}
-      # Storage Configuration
       ATTACHMENTS_FOLDER: /data/attachments
       LOGS_FOLDER: /data/logs
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
@@ -39,20 +42,35 @@ services:
     volumes:
       - /data/moretranz/attachments:/data/attachments
       - /data/moretranz/logs:/data/logs
-      - /tmp:/tmp  # For temporary file operations
+      - /tmp:/tmp
     restart: unless-stopped
 
   # React Frontend
   frontend:
-    build: 
+    build:
       context: ./frontend
       args:
-        REACT_APP_API_URL: http://74.208.173.203:8000/api/v1
-    ports:
-      - "3000:3000"
+        REACT_APP_API_URL: http://backend:8000/api/v1
+        # REACT_APP_API_URL: http://localhost:8000/api/v1
+    container_name: moretranz-frontend
     depends_on:
       - backend
+    ports:
+      - "3000:3000"
     restart: unless-stopped
+
+  # NGINX Reverse Proxy (Recommended for production)
+#  nginx:
+#    image: nginx:latest
+#    container_name: moretranz-nginx
+#    ports:
+#      - "80:80"
+#    volumes:
+#      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+#    depends_on:
+#      - frontend
+#      - backend
+#    restart: unless-stopped
 
 volumes:
   postgres_data:

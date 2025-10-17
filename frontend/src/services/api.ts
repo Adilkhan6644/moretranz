@@ -201,9 +201,18 @@ export const apiService = {
     form.append('grant_type', 'password');
     form.append('username', email);
     form.append('password', password);
+    
+    console.log('Login request data:', {
+      email,
+      formData: form.toString(),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    
     const response = await api.post('/auth/login', form.toString(), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
+    
+    console.log('Login response:', response.data);
     
     const { access_token, refresh_token } = response.data;
     if (access_token) setAuthToken(access_token);
