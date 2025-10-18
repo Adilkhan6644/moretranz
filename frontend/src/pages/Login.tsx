@@ -52,8 +52,12 @@ const Login: React.FC = () => {
       }
       
       try {
-        await apiService.login(email, password);
+        const loginResponse = await apiService.login(email, password);
+        console.log('Login successful, response:', loginResponse);
+        console.log('Navigating to:', from);
+        console.log('Current location:', location.pathname);
         navigate(from, { replace: true });
+        console.log('Navigation called');
       } catch (loginErr: any) {
         console.error('Login error:', loginErr);
         setError(mode === 'signup' ? 'Account created but login failed. Please try signing in.' : 'Invalid credentials');

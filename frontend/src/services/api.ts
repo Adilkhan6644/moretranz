@@ -215,8 +215,17 @@ export const apiService = {
     console.log('Login response:', response.data);
     
     const { access_token, refresh_token } = response.data;
-    if (access_token) setAuthToken(access_token);
-    if (refresh_token) setRefreshToken(refresh_token);
+    console.log('Access token received:', access_token ? 'Yes' : 'No');
+    console.log('Refresh token received:', refresh_token ? 'Yes' : 'No');
+    
+    if (access_token) {
+      setAuthToken(access_token);
+      console.log('Auth token set in localStorage');
+    }
+    if (refresh_token) {
+      setRefreshToken(refresh_token);
+      console.log('Refresh token set in localStorage');
+    }
     
     return response;
   },
