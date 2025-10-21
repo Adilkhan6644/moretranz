@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { apiService } from '../services/api';
+import { apiService, getAuthToken } from '../services/api';
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -23,8 +23,18 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get the page they were trying to access
-  const from = (location.state as any)?.from?.pathname || '/orders';
+  // Get the page they were trying to access from state or URL params
+  const from = (location.state as any)?.from?.pathname || 
+               new URLSearchParams(location.search).get('redirect') || 
+               '/orders';
+
+  // Check if user is already authenticated
+  useEffect(() => {
+    const token = getAuthToken();
+    if (token) {
+      navigate(from, { replace: true });
+    }
+  }, [navigate, from]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

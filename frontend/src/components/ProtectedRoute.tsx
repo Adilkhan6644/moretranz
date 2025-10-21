@@ -12,16 +12,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check for token with a small delay to ensure localStorage is available
+    // Check for token immediately
     const checkAuth = () => {
-      const authToken = getAuthToken();
-      setToken(authToken);
-      setIsChecking(false);
+      try {
+        const authToken = getAuthToken();
+        setToken(authToken);
+        setIsChecking(false);
+      } catch (error) {
+        console.error('Error checking auth token:', error);
+        setToken(null);
+        setIsChecking(false);
+      }
     };
 
-    // Small delay to ensure localStorage is ready
-    const timer = setTimeout(checkAuth, 100);
-    return () => clearTimeout(timer);
+    // Check immediately, no delay needed
+    checkAuth();
   }, []);
 
   // Show loading while checking authentication

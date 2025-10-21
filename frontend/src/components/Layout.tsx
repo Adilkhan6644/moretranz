@@ -17,11 +17,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
 
   const isAuthed = !!getAuthToken();
+  const isLoginPage = location.pathname === '/login';
+  
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home },
     { path: '/orders', label: 'Orders', icon: FileText },
     { path: '/email-config', label: 'Email Config', icon: Mail },
   ];
+
+  // For login page, don't show sidebar
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="layout">
@@ -47,14 +54,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </li>
               );
             })}
-            {!isAuthed && (
-              <li className="nav-item">
-                <Link to="/login" className={`nav-link ${location.pathname === '/login' ? 'active' : ''}`}>
-                  <Settings size={18} style={{ marginRight: '10px', verticalAlign: 'middle' }} />
-                  Login
-                </Link>
-              </li>
-            )}
           </ul>
         </nav>
         {isAuthed && (
