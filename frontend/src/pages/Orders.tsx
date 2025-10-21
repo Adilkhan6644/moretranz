@@ -24,6 +24,7 @@ interface Order {
   id: number;
   po_number: string;
   order_type: string;
+  requires_quality_check?: boolean;
   customer_name: string;
   delivery_address: string;
   committed_shipping_date: string;
@@ -136,6 +137,7 @@ const Orders: React.FC = () => {
         id: orderData.id,
         po_number: orderData.po_number,
         order_type: orderData.order_type,
+        requires_quality_check: orderData.requires_quality_check,
         customer_name: orderData.customer_name,
         delivery_address: orderData.delivery_address,
         committed_shipping_date: orderData.committed_shipping_date || '',
@@ -424,6 +426,7 @@ const Orders: React.FC = () => {
                   <th>PO Number</th>
                   <th>Customer</th>
                   <th>Order Type</th>
+                  <th>Quality Check</th>
                   <th>Processed</th>
                   <th>Actions</th>
                 </tr>
@@ -441,6 +444,20 @@ const Orders: React.FC = () => {
                       </div>
                     </td>
                     <td>{order.order_type}</td>
+                    <td>
+                      <div style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        padding: '4px 8px', 
+                        borderRadius: '4px',
+                        backgroundColor: order.requires_quality_check ? '#fff3cd' : '#d1ecf1',
+                        color: order.requires_quality_check ? '#856404' : '#0c5460',
+                        fontSize: '12px',
+                        fontWeight: '500'
+                      }}>
+                        {order.requires_quality_check ? 'Yes' : 'No'}
+                      </div>
+                    </td>
                     <td>
                       <div>
                         <Calendar size={14} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
@@ -552,6 +569,24 @@ const Orders: React.FC = () => {
                   <div style={{ padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
                     <Package size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
                     {selectedOrder.order_type}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Quality Check Required</label>
+                  <div style={{ padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+                    <div style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      padding: '6px 12px', 
+                      borderRadius: '4px',
+                      backgroundColor: selectedOrder.requires_quality_check ? '#fff3cd' : '#d1ecf1',
+                      color: selectedOrder.requires_quality_check ? '#856404' : '#0c5460',
+                      fontSize: '14px',
+                      fontWeight: '500'
+                    }}>
+                      {selectedOrder.requires_quality_check ? 'Yes' : 'No'}
+                    </div>
                   </div>
                 </div>
 

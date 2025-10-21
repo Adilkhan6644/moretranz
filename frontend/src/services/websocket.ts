@@ -7,6 +7,7 @@ export interface OrderData {
   id: number;
   po_number: string;
   order_type: string;
+  requires_quality_check?: boolean;
   customer_name: string;
   delivery_address: string;
   committed_shipping_date: string | null;

@@ -37,6 +37,7 @@ class ProcessingLog(ProcessingLogBase):
 class OrderBase(BaseModel):
     po_number: Optional[str] = None
     order_type: Optional[str] = None
+    requires_quality_check: Optional[bool] = None
     customer_name: Optional[str] = None
     delivery_address: Optional[str] = None
     committed_shipping_date: Optional[datetime] = None

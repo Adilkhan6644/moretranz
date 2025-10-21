@@ -472,7 +472,20 @@ class EmailProcessor:
         order_types = parse_order_types(body)
         
         # Extract quality check requirement
-        requires_qc = "Yes" in re.search(r"Requires Quality Check:\s*(Yes|No)", body).group(1) if re.search(r"Requires Quality Check:", body) else False
+        # Handle various formats: "Requires Quality Check: Yes", "Quality Check: Yes", etc.
+        qc_patterns = [
+            r"Requires Quality Check:\s*(Yes|No)",
+            r"Quality Check:\s*(Yes|No)",
+            r"Requires QC:\s*(Yes|No)",
+            r"QC Required:\s*(Yes|No)"
+        ]
+        
+        requires_qc = False
+        for pattern in qc_patterns:
+            qc_match = re.search(pattern, body, re.IGNORECASE)
+            if qc_match:
+                requires_qc = qc_match.group(1).lower() == "yes"
+                break
         
         # Extract delivery address
         address_section = re.search(r"Delivery address:(.*?)(?=\n\n|\Z)", body, re.DOTALL)
