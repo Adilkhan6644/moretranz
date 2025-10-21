@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = "http://74.208.173.203:8000/api/v1";
+// Use relative URL for API calls to work with both direct IP and domain access
+const API_BASE_URL = "/api/v1";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
