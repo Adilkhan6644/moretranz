@@ -9,7 +9,11 @@ def run_migrations():
     
     # List of migrations to run in order
     migrations = [
-        'add_pdf_path'
+        'add_pdf_path',
+        'add_user_email_config',
+        'clear_old_defaults',
+        'remove_default_values',
+        'rename_email_password_column'
     ]
     
     for migration in migrations:
