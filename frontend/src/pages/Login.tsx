@@ -31,8 +31,12 @@ const Login: React.FC = () => {
   // Check if user is already authenticated
   useEffect(() => {
     const token = getAuthToken();
+    console.log('🔐 Login: Checking authentication, token present:', !!token);
     if (token) {
+      console.log('🔄 Login: Token found, redirecting to:', from);
       navigate(from, { replace: true });
+    } else {
+      console.log('✅ Login: No token, staying on login page');
     }
   }, [navigate, from]);
 

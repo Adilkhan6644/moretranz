@@ -7,7 +7,8 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    po_number = Column(String(50), unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Associate order with user
+    po_number = Column(String(50), index=True)  # Remove unique constraint to allow same PO for different users
     order_type = Column(String(255))  # Comma-separated list of types (DTF, Sublimation, ProColor, Glitter)
     requires_quality_check = Column(Boolean, default=False)
     customer_name = Column(String(255))

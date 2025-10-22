@@ -58,7 +58,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </nav>
         {isAuthed && (
           <div style={{ marginTop: 'auto', padding: '12px' }}>
-            <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => { apiService.logout(); window.location.href = '/login'; }}>
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: '100%' }} 
+              onClick={async () => { 
+                try {
+                  console.log('🚪 Logout button clicked');
+                  await apiService.logout();
+                  console.log('🔄 Redirecting to login...');
+                  // Small delay to ensure token clearing takes effect
+                  setTimeout(() => {
+                    window.location.href = '/login';
+                  }, 100);
+                } catch (error) {
+                  console.error('❌ Logout error:', error);
+                  // Force redirect even if logout fails
+                  window.location.href = '/login';
+                }
+              }}
+            >
               Logout
             </button>
           </div>

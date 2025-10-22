@@ -20,10 +20,10 @@ def get_orders(
     limit: int = 100,
     search: str = None,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
-    """Get all processed orders with optional PO number search"""
-    query = db.query(OrderModel)
+    """Get all processed orders for the current user with optional PO number search"""
+    query = db.query(OrderModel).filter(OrderModel.user_id == current_user.id)
     
     # Add search filter if provided
     if search:
@@ -33,9 +33,9 @@ def get_orders(
     return orders
 
 @router.get("/latest", response_model=Order)
-def get_latest_order(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    """Get the most recently processed order"""
-    order = db.query(OrderModel).order_by(OrderModel.processed_time.desc()).first()
+def get_latest_order(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Get the most recently processed order for the current user"""
+    order = db.query(OrderModel).filter(OrderModel.user_id == current_user.id).order_by(OrderModel.processed_time.desc()).first()
     if not order:
         raise HTTPException(status_code=404, detail="No orders found")
     return order
@@ -55,10 +55,13 @@ async def get_processing_status():
 def get_order(
     order_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
-    """Get a specific order by ID"""
-    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    """Get a specific order by ID for the current user"""
+    order = db.query(OrderModel).filter(
+        OrderModel.id == order_id,
+        OrderModel.user_id == current_user.id
+    ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return order
@@ -67,10 +70,13 @@ def get_order(
 def delete_order(
     order_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
-    """Delete a specific order by ID"""
-    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    """Delete a specific order by ID for the current user"""
+    order = db.query(OrderModel).filter(
+        OrderModel.id == order_id,
+        OrderModel.user_id == current_user.id
+    ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
@@ -162,33 +168,24 @@ def download_attachment(
 @router.post("/start-processing")
 async def start_processing(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Start the email processing service"""
     if email_scheduler.is_running:
         return {"status": "Email processing is already running"}
     
-    # Get email config and validate credentials
-    from app.models.order import EmailConfig as EmailConfigModel
-    email_config = db.query(EmailConfigModel).first()
-    
-    if not email_config:
-        raise HTTPException(
-            status_code=400, 
-            detail="Email configuration not found. Please configure email settings first."
-        )
-    
-    if not email_config.email_address or not email_config.email_password:
+    # Check if current user has email configuration
+    if not current_user.email_address or not current_user.email_app_password:
         raise HTTPException(
             status_code=400,
-            detail="Email credentials not configured. Please set up email address and password."
+            detail="Email credentials not configured. Please set up your email address and App Password in the Email Configuration section."
         )
     
     # Validate credentials before starting
     import imaplib
     try:
-        mail = imaplib.IMAP4_SSL(email_config.imap_server)
-        mail.login(email_config.email_address, email_config.email_password)
+        mail = imaplib.IMAP4_SSL(current_user.imap_server)
+        mail.login(current_user.email_address, current_user.email_app_password)
         mail.select('INBOX')
         mail.close()
         mail.logout()
@@ -197,7 +194,7 @@ async def start_processing(
         if "AUTHENTICATIONFAILED" in error_msg:
             raise HTTPException(
                 status_code=400,
-                detail="Invalid email credentials. Please check your email settings and ensure you're using an App Password for Gmail."
+                detail="Invalid email credentials. Please check your email settings and ensure you're using a Gmail App Password (not your regular Gmail password)."
             )
         else:
             raise HTTPException(
@@ -210,7 +207,7 @@ async def start_processing(
             detail=f"Failed to validate email credentials: {str(e)}"
         )
     
-    sleep_time = email_config.sleep_time
+    sleep_time = current_user.sleep_time
     await email_scheduler.start_processing(sleep_time)
     return {"status": "Email processing started successfully"}
 

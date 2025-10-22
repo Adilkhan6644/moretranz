@@ -17,7 +17,7 @@ import {
   X,
   Printer
 } from 'lucide-react';
-import { apiService } from '../services/api';
+import { apiService, forceLogout } from '../services/api';
 import websocketService, { OrderData } from '../services/websocket';
 
 interface Order {
@@ -72,12 +72,30 @@ const Orders: React.FC = () => {
   useEffect(() => {
     // Initial setup
     const init = async () => {
+      // Test authentication first
+      try {
+        console.log('🔐 Testing authentication...');
+        await apiService.testAuth();
+        console.log('✅ Authentication test passed');
+      } catch (err: any) {
+        console.error('❌ Authentication test failed:', err);
+        if (err.response?.status === 401) {
+          console.log('🚨 Invalid token detected, clearing and redirecting to login');
+          setError('Authentication failed. Please log in again.');
+          forceLogout();
+          return;
+        }
+      }
+      
       // Fetch orders
       await fetchOrders();
       
       // Get initial processing status
       try {
+        console.log('🔍 Fetching processing status...');
         const status = await apiService.getProcessingStatus();
+        console.log('✅ Processing status received:', status.data);
+        
         const isProcessing = status.data?.is_processing || false;
         setIsProcessing(isProcessing);
         
@@ -86,8 +104,15 @@ const Orders: React.FC = () => {
           websocketService.connect();
           setIsConnected(true);
         }
-      } catch (err) {
-        console.error('Failed to get initial status:', err);
+      } catch (err: any) {
+        console.error('❌ Failed to get initial status:', err);
+        console.error('Status error details:', {
+          message: err.message,
+          status: err.response?.status,
+          data: err.response?.data
+        });
+        // Don't fail the entire initialization if status check fails
+        setIsProcessing(false);
       }
     };
     
@@ -185,12 +210,32 @@ const Orders: React.FC = () => {
   const fetchOrders = async (search?: string, page: number = 0) => {
     try {
       setSearchLoading(true);
+      console.log('🔍 Fetching orders with params:', { search, page, skip: page * ITEMS_PER_PAGE, limit: ITEMS_PER_PAGE });
+      
       const response = await apiService.getAllOrders(search, page * ITEMS_PER_PAGE, ITEMS_PER_PAGE);
+      console.log('✅ Orders fetch successful:', response.data);
+      
       setOrders(response.data || []);
       setError(null);
-    } catch (err) {
-      setError('Failed to fetch orders');
-      console.error('Orders fetch error:', err);
+    } catch (err: any) {
+      console.error('❌ Orders fetch error:', err);
+      console.error('Error details:', {
+        message: err.message,
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        data: err.response?.data
+      });
+      
+      if (err.response?.status === 401) {
+        setError('Authentication failed. Please log in again.');
+        forceLogout();
+      } else if (err.response?.status === 403) {
+        setError('Access denied. You do not have permission to view orders.');
+      } else if (err.response?.status >= 500) {
+        setError('Server error. Please try again later.');
+      } else {
+        setError(`Failed to fetch orders: ${err.response?.data?.detail || err.message || 'Unknown error'}`);
+      }
     } finally {
       setLoading(false);
       setSearchLoading(false);
@@ -384,6 +429,17 @@ const Orders: React.FC = () => {
       {error && (
         <div className="alert alert-error">
           {error}
+          {error.includes('Authentication failed') && (
+            <div style={{ marginTop: '10px' }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={forceLogout}
+                style={{ padding: '5px 10px', fontSize: '12px' }}
+              >
+                Clear Session & Login Again
+              </button>
+            </div>
+          )}
         </div>
       )}
 

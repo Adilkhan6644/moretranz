@@ -16,10 +16,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const checkAuth = () => {
       try {
         const authToken = getAuthToken();
+        console.log('🔐 ProtectedRoute: Auth token check:', authToken ? 'Present' : 'Missing');
         setToken(authToken);
         setIsChecking(false);
       } catch (error) {
-        console.error('Error checking auth token:', error);
+        console.error('❌ ProtectedRoute: Error checking auth token:', error);
         setToken(null);
         setIsChecking(false);
       }
@@ -27,7 +28,18 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
     // Check immediately, no delay needed
     checkAuth();
-  }, []);
+    
+    // Add a timeout as a safety net
+    const timeout = setTimeout(() => {
+      if (isChecking) {
+        console.warn('⚠️ ProtectedRoute: Auth check timeout, assuming no token');
+        setIsChecking(false);
+        setToken(null);
+      }
+    }, 5000); // 5 second timeout
+    
+    return () => clearTimeout(timeout);
+  }, [isChecking]);
 
   // Show loading while checking authentication
   if (isChecking) {

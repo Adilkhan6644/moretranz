@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Mail, Shield, Clock, Users, CheckCircle2, XCircle } from 'lucide-react';
 import { apiService } from '../services/api';
 
-interface EmailConfig {
+interface EmailConfigData {
   email_address: string;
-  email_password: string;
+  email_app_password: string;
   imap_server: string;
   allowed_senders: string;
   max_age_days: number;
@@ -12,13 +12,13 @@ interface EmailConfig {
 }
 
 const EmailConfig: React.FC = () => {
-  const [config, setConfig] = useState<EmailConfig>({
+  const [config, setConfig] = useState<EmailConfigData>({
     email_address: '',
-    email_password: '',
-    imap_server: 'imap.gmail.com',
+    email_app_password: '',
+    imap_server: '',
     allowed_senders: '',
-    max_age_days: 10,
-    sleep_time: 5
+    max_age_days: 0,
+    sleep_time: 0
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -34,7 +34,19 @@ const EmailConfig: React.FC = () => {
   const fetchConfig = async () => {
     try {
       const response = await apiService.getEmailConfig();
-      setConfig(response.data);
+      const userConfig = response.data;
+      
+      // Set the config with user's saved values, or use defaults if not set
+      const newConfig = {
+        email_address: userConfig.email_address || '',
+        email_app_password: userConfig.email_app_password || '',
+        imap_server: userConfig.imap_server || '',
+        allowed_senders: userConfig.allowed_senders || '',
+        max_age_days: userConfig.max_age_days || 0,
+        sleep_time: userConfig.sleep_time || 0
+      };
+      
+      setConfig(newConfig);
       setError(null);
     } catch (err) {
       setError('Failed to load email configuration');
@@ -45,10 +57,10 @@ const EmailConfig: React.FC = () => {
   };
 
   const handleValidateCredentials = async () => {
-    if (!config.email_address || !config.email_password) {
+    if (!config.email_address || !config.email_app_password) {
       setValidationResult({
         valid: false,
-        message: 'Please enter both email address and password'
+        message: 'Please enter both email address and App Password'
       });
       return;
     }
@@ -59,7 +71,7 @@ const EmailConfig: React.FC = () => {
     try {
       const response = await apiService.validateEmailCredentials(
         config.email_address,
-        config.email_password,
+        config.email_app_password,
         config.imap_server
       );
       setValidationResult(response.data);
@@ -93,8 +105,22 @@ const EmailConfig: React.FC = () => {
     }
   };
 
-  const handleInputChange = (field: keyof EmailConfig, value: string | number) => {
+  const handleInputChange = (field: keyof EmailConfigData, value: string | number) => {
     setConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleReset = () => {
+    setConfig({
+      email_address: '',
+      email_app_password: '',
+      imap_server: '',
+      allowed_senders: '',
+      max_age_days: 0,
+      sleep_time: 0
+    });
+    setError(null);
+    setSuccess(null);
+    setValidationResult(null);
   };
 
   if (loading) {
@@ -108,7 +134,22 @@ const EmailConfig: React.FC = () => {
 
   return (
     <div>
-      <h1 style={{ marginBottom: '30px', color: '#2c3e50' }}>Email Configuration</h1>
+      <h1 style={{ marginBottom: '30px', color: '#2c3e50' }}>My Email Configuration</h1>
+      
+      <div style={{ 
+        backgroundColor: '#e8f4fd', 
+        border: '1px solid #bee5eb', 
+        borderRadius: '8px', 
+        padding: '15px', 
+        marginBottom: '20px',
+        color: '#0c5460'
+      }}>
+        <strong>📧 Personal Email Settings</strong><br />
+        Configure your own email account for processing orders. Each user has their own separate email configuration and will only process emails from their own inbox.
+        <br /><br />
+        <strong>🔐 Password Note:</strong> Use your Gmail App Password (not your regular Gmail password or Moretranz login password). 
+        Generate an App Password in your Google Account settings under Security.
+      </div>
       
       {error && (
         <div className="alert alert-error">
@@ -159,13 +200,16 @@ const EmailConfig: React.FC = () => {
                   <input
                     type="password"
                     className="form-control"
-                    value={config.email_password}
-                    onChange={(e) => handleInputChange('email_password', e.target.value)}
+                    value={config.email_app_password}
+                    onChange={(e) => handleInputChange('email_app_password', e.target.value)}
                     placeholder="Your Gmail App Password"
                     required
                   />
                   <small style={{ color: '#7f8c8d', fontSize: '12px' }}>
-                    Use Gmail App Password, not your regular password
+                    Use Gmail App Password (not your regular Gmail password). 
+                    <br />
+                    <strong>Important:</strong> This is different from your Moretranz login password. 
+                    Generate an App Password in your Google Account settings.
                   </small>
                 </div>
 
@@ -176,7 +220,7 @@ const EmailConfig: React.FC = () => {
                     className="form-control"
                     value={config.imap_server}
                     onChange={(e) => handleInputChange('imap_server', e.target.value)}
-                    placeholder="imap.gmail.com"
+                    placeholder="imap.gmail.com (default)"
                     required
                   />
                 </div>
@@ -209,8 +253,9 @@ const EmailConfig: React.FC = () => {
                   <input
                     type="number"
                     className="form-control"
-                    value={config.max_age_days}
-                    onChange={(e) => handleInputChange('max_age_days', parseInt(e.target.value))}
+                    value={config.max_age_days || ''}
+                    onChange={(e) => handleInputChange('max_age_days', parseInt(e.target.value) || 0)}
+                    placeholder="10 (default)"
                     min="1"
                     max="30"
                     required
@@ -225,8 +270,9 @@ const EmailConfig: React.FC = () => {
                   <input
                     type="number"
                     className="form-control"
-                    value={config.sleep_time}
-                    onChange={(e) => handleInputChange('sleep_time', parseInt(e.target.value))}
+                    value={config.sleep_time || ''}
+                    onChange={(e) => handleInputChange('sleep_time', parseInt(e.target.value) || 0)}
+                    placeholder="5 (default)"
                     min="1"
                     max="60"
                     required
@@ -263,13 +309,22 @@ const EmailConfig: React.FC = () => {
                 style={{ marginRight: '10px' }}
               >
                 <RefreshCw size={16} style={{ marginRight: '8px' }} />
-                Reset
+                Load Saved
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleReset}
+                style={{ marginRight: '10px' }}
+              >
+                <RefreshCw size={16} style={{ marginRight: '8px' }} />
+                Clear Form
               </button>
               <button
                 type="button"
                 className="btn btn-outline"
                 onClick={handleValidateCredentials}
-                disabled={validating || !config.email_address || !config.email_password}
+                disabled={validating || !config.email_address || !config.email_app_password}
                 style={{ marginRight: '10px' }}
               >
                 <Shield size={16} style={{ marginRight: '8px' }} />

@@ -20,6 +20,7 @@ from urllib.parse import urlparse, unquote
 from app.core.config import settings
 from app.services.storage_service import storage_service
 from app.models.order import Order, Attachment, ProcessingLog, PrintJob, EmailConfig as EmailConfigModel
+from app.models.user import User
 from app.services.printer_service import PrinterService
 from app.websocket_manager import manager
 
@@ -523,187 +524,190 @@ class EmailProcessor:
         }
 
     async def monitor_emails(self):
-        # Get email config from database
-        email_config = self.db.query(EmailConfigModel).first()
-        if not email_config:
-            print("❌ No email configuration found in database")
+        # Get all users with email configurations
+        users_with_config = self.db.query(User).filter(
+            User.email_address.isnot(None),
+            User.email_app_password.isnot(None),
+            User.is_active == True
+        ).all()
+        
+        if not users_with_config:
+            print("❌ No users with email configuration found")
             return
             
-        EMAIL = email_config.email_address
-        PASSWORD = email_config.email_password
-        ALLOWED_SENDER = email_config.allowed_senders.split(',')[0] if email_config.allowed_senders else None
-        POLL_INTERVAL = email_config.sleep_time
+        print(f"📧 Found {len(users_with_config)} users with email configurations")
+        
+        # Process emails for each user
+        for user in users_with_config:
+            await self.monitor_user_emails(user)
+
+    async def monitor_user_emails(self, user: User):
+        """Monitor emails for a specific user"""
+        EMAIL = user.email_address
+        PASSWORD = user.email_app_password
+        ALLOWED_SENDER = user.allowed_senders.split(',')[0] if user.allowed_senders else None
+        POLL_INTERVAL = user.sleep_time
 
         try:
-            print(f"\n🔄 EmailProcessor.monitor_emails() started with is_running={self.is_running}")
-            print("\n📧 Connecting to Gmail...")
+            print(f"\n🔄 Processing emails for user: {user.email}")
+            print(f"📧 Connecting to {user.imap_server}...")
             print(f"Checking inbox of: {EMAIL}")
             print(f"Looking for emails from: {ALLOWED_SENDER}")
             
-            self.mail = imaplib.IMAP4_SSL("imap.gmail.com", 993, 
-                                        ssl_context=ssl.create_default_context())
-            self.mail.login(EMAIL, PASSWORD)
+            mail = imaplib.IMAP4_SSL(user.imap_server, 993, 
+                                    ssl_context=ssl.create_default_context())
+            mail.login(EMAIL, PASSWORD)
             print("✅ Login successful!")
             self.log_to_db("Email Connection", "success")
 
-            while self.is_running:
-                try:
-                    # Re-select inbox each time to refresh connection
-                    self.mail.select("inbox")
-                    print("\n🔍 Checking for unread emails...")
+            # Re-select inbox each time to refresh connection
+            mail.select("inbox")
+            print("\n🔍 Checking for unread emails...")
 
-                    # Search for unread emails
-                    status, messages = self.mail.search(None, 'UNSEEN')
-                    if status != 'OK':
-                        print("⚠️ Failed to search emails, reconnecting...")
-                        # Reconnect and try again
-                        self.mail = imaplib.IMAP4_SSL("imap.gmail.com", 993, 
-                                                    ssl_context=ssl.create_default_context())
-                        self.mail.login(EMAIL, PASSWORD)
-                        self.mail.select("inbox")
-                        status, messages = self.mail.search(None, 'UNSEEN')
-                    
-                    email_ids = messages[0].split()
+            # Search for unread emails
+            status, messages = mail.search(None, 'UNSEEN')
+            if status != 'OK':
+                print("⚠️ Failed to search emails, reconnecting...")
+                # Reconnect and try again
+                mail = imaplib.IMAP4_SSL(user.imap_server, 993, 
+                                        ssl_context=ssl.create_default_context())
+                mail.login(EMAIL, PASSWORD)
+                mail.select("inbox")
+                status, messages = mail.search(None, 'UNSEEN')
+            
+            email_ids = messages[0].split()
 
-                    if email_ids:
-                        print(f"📩 Found {len(email_ids)} unread emails")
-                        for e_id in email_ids:
-                            try:
-                                status, msg_data = self.mail.fetch(e_id, '(RFC822)')
-                                if status != 'OK':
-                                    print(f"⚠️ Failed to fetch email {e_id}, skipping...")
-                                    continue
-                                    
-                                email_body = msg_data[0][1]
-                                email_message = email.message_from_bytes(email_body)
-                            except Exception as e:
-                                print(f"❌ Error fetching email {e_id}: {str(e)}")
-                                continue
-
-                        sender = email_message['from']
-                        recipient = email_message['to']
-                        subject = decode_email_subject(email_message['subject'])
-
-                        print(f"\n📨 Email Details:")
-                        print(f"From: {sender}")
-                        print(f"To: {recipient}")
-                        print(f"Subject: {subject}")
-
-                        if ALLOWED_SENDER in sender:
-                            print("✅ Sender is in allowed list!")
-                            body = get_email_body(email_message)
-                            print("\n📝 Email Body:")
-                            print(body if body else "(No plain text body found)")
-
-                            try:
-                                # Parse order details
-                                order_details = self.parse_order_details(body)
-                                print("\n📦 Order Details:")
-                                print(f"PO Number: {order_details['po_number']}")
-                                print(f"Order Type: {order_details['order_type']}")
-                                print(f"Customer: {order_details['customer_name']}")
-
-                                # Check if order with this PO number already exists
-                                existing_order = self.db.query(Order).filter(Order.po_number == order_details['po_number']).first()
-                                
-                                if existing_order:
-                                    print(f"⚠️ Order with PO number {order_details['po_number']} already exists (ID: {existing_order.id}). Skipping duplicate.")
-                                    continue
-
-                                # Create folder
-                                sanitized_customer_name = sanitize_folder_name(order_details['customer_name'])
-                                folder_path = os.path.join(settings.ATTACHMENTS_FOLDER, f"{order_details['po_number']}_{sanitized_customer_name}")
-                                os.makedirs(folder_path, exist_ok=True)
-                                print(f"📁 Created folder: {folder_path}")
-
-                                # Save order to database
-                                order = Order(
-                                    po_number=order_details['po_number'],
-                                    order_type=order_details['order_type'],
-                                    requires_quality_check=order_details['requires_quality_check'],
-                                    customer_name=order_details['customer_name'],
-                                    delivery_address=order_details['delivery_address'],
-                                    committed_shipping_date=order_details['committed_shipping_date'],
-                                    email_id=e_id.decode(),
-                                    status="processing",
-                                    folder_path=folder_path
-                                )
-                                print("💾 Saving order to database...")
-                                try:
-                                    self.db.add(order)
-                                    self.db.commit()
-                                    print("✅ Order saved successfully")
-                                except IntegrityError as e:
-                                    self.db.rollback()
-                                    print(f"⚠️ Order with PO number {order_details['po_number']} already exists (database constraint). Skipping duplicate.")
-                                    continue
-                                
-                                # Broadcast new order via WebSocket
-                                await self.broadcast_new_order(order)
-
-                                # Save print jobs
-                                for job in order_details['print_jobs']:
-                                    print_job = PrintJob(
-                                        order_id=order.id,
-                                        job_type=job['job_type'],
-                                        total_print_length=job['total_print_length'],
-                                        gang_sheets=job['gang_sheets'],
-                                        status="pending"
-                                    )
-                                    self.db.add(print_job)
-                                print("💾 Saving print jobs...")
-                                self.db.commit()
-                                print("✅ Print jobs saved successfully")
-
-                                # Process attachments
-                                await self.process_attachments(email_message, order)
-                                
-                                # Process download URLs from email body
-                                await self.process_download_urls(email_message, order)
-                                
-                                # Create email body PDF
-                                await self.create_email_body_pdf(email_message, order, body)
-                                
-                                # Update order status
-                                order.status = "completed"
-                                self.db.commit()
-                                print(f"✅ Order {order_details['po_number']} processed successfully")
-                                
-                                # Broadcast order completion via WebSocket
-                                await self.broadcast_order_update(order)
-
-                            except Exception as e:
-                                print(f"❌ Error processing order: {str(e)}")
-                                self.log_to_db("Order Processing", "failed", str(e))
-                                continue
-
-                        else:
-                            print(f"❌ Sender not allowed! Expected: {ALLOWED_SENDER}, Got: {sender}")
-                    else:
-                        print("📭 No unread emails found")
-
-                    print(f"\n⏳ Waiting {POLL_INTERVAL} seconds before next check...")
-                    await asyncio.sleep(POLL_INTERVAL)
-
-                except imaplib.IMAP4.error as e:
-                    print(f"⚠️ IMAP error: {str(e)}, reconnecting...")
+            if email_ids:
+                print(f"📩 Found {len(email_ids)} unread emails for user {user.email}")
+                for e_id in email_ids:
                     try:
-                        self.mail = imaplib.IMAP4_SSL("imap.gmail.com", 993, 
-                                                    ssl_context=ssl.create_default_context())
-                        self.mail.login(EMAIL, PASSWORD)
+                        status, msg_data = mail.fetch(e_id, '(RFC822)')
+                        if status != 'OK':
+                            print(f"⚠️ Failed to fetch email {e_id}, skipping...")
+                            continue
+                            
+                        email_body = msg_data[0][1]
+                        email_message = email.message_from_bytes(email_body)
                     except Exception as e:
-                        print(f"❌ Failed to reconnect: {str(e)}")
-                        await asyncio.sleep(POLL_INTERVAL)
-                except Exception as e:
-                    print(f"❌ Unexpected error: {str(e)}")
-                    await asyncio.sleep(POLL_INTERVAL)
+                        print(f"❌ Error fetching email {e_id}: {str(e)}")
+                        continue
+
+                    sender = email_message['from']
+                    recipient = email_message['to']
+                    subject = decode_email_subject(email_message['subject'])
+
+                    print(f"\n📨 Email Details:")
+                    print(f"From: {sender}")
+                    print(f"To: {recipient}")
+                    print(f"Subject: {subject}")
+
+                    if ALLOWED_SENDER and ALLOWED_SENDER in sender:
+                        print("✅ Sender is in allowed list!")
+                        body = get_email_body(email_message)
+                        print("\n📝 Email Body:")
+                        print(body if body else "(No plain text body found)")
+
+                        try:
+                            # Parse order details
+                            order_details = self.parse_order_details(body)
+                            print("\n📦 Order Details:")
+                            print(f"PO Number: {order_details['po_number']}")
+                            print(f"Order Type: {order_details['order_type']}")
+                            print(f"Customer: {order_details['customer_name']}")
+
+                            # Check if order with this PO number already exists for this user
+                            existing_order = self.db.query(Order).filter(
+                                Order.po_number == order_details['po_number'],
+                                Order.user_id == user.id
+                            ).first()
+                            
+                            if existing_order:
+                                print(f"⚠️ Order with PO number {order_details['po_number']} already exists for user {user.email} (ID: {existing_order.id}). Skipping duplicate.")
+                                continue
+
+                            # Create folder with user-specific path
+                            sanitized_customer_name = sanitize_folder_name(order_details['customer_name'])
+                            folder_path = os.path.join(settings.ATTACHMENTS_FOLDER, f"user_{user.id}", f"{order_details['po_number']}_{sanitized_customer_name}")
+                            os.makedirs(folder_path, exist_ok=True)
+                            print(f"📁 Created folder: {folder_path}")
+
+                            # Save order to database with user_id
+                            order = Order(
+                                user_id=user.id,  # Associate order with user
+                                po_number=order_details['po_number'],
+                                order_type=order_details['order_type'],
+                                requires_quality_check=order_details['requires_quality_check'],
+                                customer_name=order_details['customer_name'],
+                                delivery_address=order_details['delivery_address'],
+                                committed_shipping_date=order_details['committed_shipping_date'],
+                                email_id=e_id.decode(),
+                                status="processing",
+                                folder_path=folder_path
+                            )
+                            print("💾 Saving order to database...")
+                            try:
+                                self.db.add(order)
+                                self.db.commit()
+                                print("✅ Order saved successfully")
+                            except IntegrityError as e:
+                                self.db.rollback()
+                                print(f"⚠️ Order with PO number {order_details['po_number']} already exists for user {user.email} (database constraint). Skipping duplicate.")
+                                continue
+                            
+                            # Broadcast new order via WebSocket
+                            await self.broadcast_new_order(order)
+
+                            # Save print jobs
+                            for job in order_details['print_jobs']:
+                                print_job = PrintJob(
+                                    order_id=order.id,
+                                    job_type=job['job_type'],
+                                    total_print_length=job['total_print_length'],
+                                    gang_sheets=job['gang_sheets'],
+                                    status="pending"
+                                )
+                                self.db.add(print_job)
+                            print("💾 Saving print jobs...")
+                            self.db.commit()
+                            print("✅ Print jobs saved successfully")
+
+                            # Process attachments
+                            await self.process_attachments(email_message, order)
+                            
+                            # Process download URLs from email body
+                            await self.process_download_urls(email_message, order)
+                            
+                            # Create email body PDF
+                            await self.create_email_body_pdf(email_message, order, body)
+                            
+                            # Update order status
+                            order.status = "completed"
+                            self.db.commit()
+                            print(f"✅ Order {order_details['po_number']} processed successfully for user {user.email}")
+                            
+                            # Broadcast order completion via WebSocket
+                            await self.broadcast_order_update(order)
+
+                        except Exception as e:
+                            print(f"❌ Error processing order: {str(e)}")
+                            self.log_to_db("Order Processing", "failed", str(e))
+                            continue
+
+                    else:
+                        print(f"❌ Sender not allowed! Expected: {ALLOWED_SENDER}, Got: {sender}")
+            else:
+                print(f"📭 No unread emails found for user {user.email}")
+
+            # Close connection
+            mail.close()
+            mail.logout()
 
         except Exception as e:
             error_msg = str(e)
-            print(f"❌ Error: {error_msg}")
+            print(f"❌ Error processing emails for user {user.email}: {error_msg}")
             self.log_to_db("Email Processing", "failed", error_msg)
             if "Invalid credentials" in error_msg:
-                print("\n⚠️ Check that you're using an App Password, not your regular Gmail password!")
+                print(f"\n⚠️ Check that user {user.email} is using a Gmail App Password, not their regular Gmail password!")
         
     
 

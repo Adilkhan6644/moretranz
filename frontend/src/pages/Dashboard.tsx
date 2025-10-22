@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Square, Activity, Mail, FileText, AlertCircle, Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { apiService } from '../services/api';
+import { apiService, forceLogout } from '../services/api';
 import websocketService, { OrderData, StatusData } from '../services/websocket';
 
 interface DashboardStats {
@@ -90,6 +90,23 @@ const Dashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
+      console.log('🔍 Dashboard: Fetching dashboard data...');
+      
+      // Test authentication first
+      try {
+        console.log('🔐 Dashboard: Testing authentication...');
+        await apiService.testAuth();
+        console.log('✅ Dashboard: Authentication test passed');
+      } catch (err: any) {
+        console.error('❌ Dashboard: Authentication test failed:', err);
+        if (err.response?.status === 401) {
+          console.log('🚨 Dashboard: Invalid token detected, redirecting to login');
+          setError('Authentication failed. Please log in again.');
+          forceLogout();
+          return;
+        }
+      }
+      
       const [ordersResponse, processingStatus] = await Promise.all([
         apiService.getAllOrders(),
         apiService.getProcessingStatus()
@@ -115,9 +132,14 @@ const Dashboard: React.FC = () => {
 
       setStats(stats);
       setError(null);
-    } catch (err) {
-      setError('Failed to fetch dashboard data');
-      console.error('Dashboard error:', err);
+    } catch (err: any) {
+      console.error('❌ Dashboard error:', err);
+      if (err.response?.status === 401) {
+        setError('Authentication failed. Please log in again.');
+        forceLogout();
+      } else {
+        setError('Failed to fetch dashboard data');
+      }
     } finally {
       setLoading(false);
     }
@@ -190,6 +212,17 @@ const Dashboard: React.FC = () => {
         <div className="alert alert-error">
           <AlertCircle size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
           {error}
+          {error.includes('Authentication failed') && (
+            <div style={{ marginTop: '10px' }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={forceLogout}
+                style={{ padding: '5px 10px', fontSize: '12px' }}
+              >
+                Clear Session & Login Again
+              </button>
+            </div>
+          )}
         </div>
       )}
 

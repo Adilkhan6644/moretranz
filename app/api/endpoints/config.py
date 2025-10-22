@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.db.session import get_db
 from app.schemas.order import EmailConfig, PrinterConfig
+from app.schemas.user import UserEmailConfigUpdate, UserEmailConfigResponse, UserEmailConfig
 from app.models.order import EmailConfig as EmailConfigModel
 from app.models.order import PrinterConfig as PrinterConfigModel
 from pydantic import BaseModel
@@ -13,77 +14,41 @@ import imaplib
 
 router = APIRouter()
 
-class EmailConfigUpdate(BaseModel):
-    email_address: str
-    email_password: str
-    imap_server: str = "imap.gmail.com"
-    allowed_senders: str
-    max_age_days: int = 10
-    sleep_time: int = 5
-
-class EmailConfigResponse(BaseModel):
-    email_address: str
-    imap_server: str
-    allowed_senders: str
-    max_age_days: int
-    sleep_time: int
 
 class EmailValidationRequest(BaseModel):
     email_address: str
-    email_password: str
+    email_app_password: str
     imap_server: str = "imap.gmail.com"
 
 class EmailValidationResponse(BaseModel):
     valid: bool
     message: str
 
-@router.get("/email", response_model=EmailConfigResponse)
-def get_email_config(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    """Get current email configuration"""
-    config = db.query(EmailConfigModel).first()
-    if not config:
-        return {
-            "email_address": "",
-            "imap_server": "imap.gmail.com",
-            "allowed_senders": "",
-            "max_age_days": 10,
-            "sleep_time": 5
-        }
-    return {
-        "email_address": config.email_address,
-        "imap_server": config.imap_server,
-        "allowed_senders": config.allowed_senders,
-        "max_age_days": config.max_age_days,
-        "sleep_time": config.sleep_time
-    }
+@router.get("/email", response_model=UserEmailConfigResponse)
+def get_email_config(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Get current user's email configuration"""
+    return UserEmailConfigResponse(
+        email_address=current_user.email_address,
+        imap_server=current_user.imap_server,
+        allowed_senders=current_user.allowed_senders,
+        max_age_days=current_user.max_age_days,
+        sleep_time=current_user.sleep_time
+    )
 
 @router.put("/email")
-def update_email_config(config: EmailConfigUpdate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    """Update email configuration"""
+def update_email_config(config: UserEmailConfigUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Update current user's email configuration"""
     from app.services.scheduler import email_scheduler
     
-    db_config = db.query(EmailConfigModel).first()
-    old_sleep_time = db_config.sleep_time if db_config else 5
+    old_sleep_time = current_user.sleep_time
     
-    if not db_config:
-        # Create new config if none exists
-        db_config = EmailConfigModel(
-            email_address=config.email_address,
-            email_password=config.email_password,
-            imap_server=config.imap_server,
-            allowed_senders=config.allowed_senders,
-            max_age_days=config.max_age_days,
-            sleep_time=config.sleep_time
-        )
-        db.add(db_config)
-    else:
-        # Update existing config
-        db_config.email_address = config.email_address
-        db_config.email_password = config.email_password
-        db_config.imap_server = config.imap_server
-        db_config.allowed_senders = config.allowed_senders
-        db_config.max_age_days = config.max_age_days
-        db_config.sleep_time = config.sleep_time
+    # Update user's email configuration
+    current_user.email_address = config.email_address
+    current_user.email_app_password = config.email_app_password
+    current_user.imap_server = config.imap_server
+    current_user.allowed_senders = config.allowed_senders
+    current_user.max_age_days = config.max_age_days
+    current_user.sleep_time = config.sleep_time
     
     db.commit()
     
@@ -101,7 +66,7 @@ def validate_email_credentials(validation: EmailValidationRequest, _: User = Dep
         mail = imaplib.IMAP4_SSL(validation.imap_server)
         
         # Try to login with provided credentials
-        mail.login(validation.email_address, validation.email_password)
+        mail.login(validation.email_address, validation.email_app_password)
         
         # Test accessing inbox
         mail.select('INBOX')
@@ -120,7 +85,7 @@ def validate_email_credentials(validation: EmailValidationRequest, _: User = Dep
         if "AUTHENTICATIONFAILED" in error_msg:
             return {
                 "valid": False,
-                "message": "Invalid email or password. Please check your credentials and ensure you're using an App Password for Gmail."
+                "message": "Invalid email or App Password. Please check your credentials and ensure you're using a Gmail App Password (not your regular Gmail password)."
             }
         else:
             return {

@@ -1,7 +1,10 @@
 import axios from 'axios';
 
 // Use relative URL for API calls to work with both direct IP and domain access
-const API_BASE_URL = "/api/v1";
+// const API_BASE_URL = "/api/v1";
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+
+
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -60,12 +63,34 @@ export function clearAllTokens() {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
+export function forceLogout() {
+  console.log('🚨 Force logout: clearing all tokens and redirecting to login');
+  clearAllTokens();
+  if (typeof window !== 'undefined') {
+    const currentPath = window.location.pathname;
+    if (currentPath !== '/login') {
+      window.location.href = '/login';
+    }
+  }
+}
+
 // Attach token to requests
 api.interceptors.request.use((config) => {
   const token = getAuthToken();
   if (token) {
+    // Validate token format (basic JWT format check)
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      console.warn('⚠️ Invalid token format detected, clearing token');
+      clearAllTokens();
+      return config;
+    }
+    
     config.headers = config.headers || {};
     (config.headers as any)['Authorization'] = `Bearer ${token}`;
+    console.log('🔑 Attaching token to request:', config.url);
+  } else {
+    console.log('🔑 No token available for request:', config.url);
   }
   return config;
 });
@@ -125,12 +150,14 @@ api.interceptors.response.use(
           return api(originalRequest);
         } catch (refreshError) {
           // Refresh failed, logout user
+          console.log('🚨 Token refresh failed, clearing tokens and redirecting to login');
           clearAllTokens();
           processQueue(refreshError, null);
           
           if (typeof window !== 'undefined') {
             const currentPath = window.location.pathname;
             if (currentPath !== '/login') {
+              console.log('🔄 Redirecting to login from:', currentPath);
               window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
             }
           }
@@ -140,11 +167,13 @@ api.interceptors.response.use(
         }
       } else {
         // No refresh token, logout user
+        console.log('🚨 No refresh token available, clearing tokens and redirecting to login');
         clearAllTokens();
         
         if (typeof window !== 'undefined') {
           const currentPath = window.location.pathname;
           if (currentPath !== '/login') {
+            console.log('🔄 Redirecting to login from:', currentPath);
             window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
           }
         }
@@ -157,7 +186,7 @@ api.interceptors.response.use(
 
 export interface EmailConfig {
   email_address: string;
-  email_password: string;
+  email_app_password: string;
   imap_server: string;
   allowed_senders: string;
   max_age_days: number;
@@ -233,13 +262,20 @@ export const apiService = {
 
   async logout() {
     try {
+      console.log('🚪 Logging out...');
+      
+      // Clear tokens immediately to prevent race conditions
+      console.log('🧹 Clearing local tokens immediately...');
+      clearAllTokens();
+      
       // Call logout endpoint to clear refresh token on server
       await api.post('/auth/logout');
-    } catch (error) {
-      // Even if server logout fails, clear local tokens
-      console.warn('Server logout failed, clearing local tokens');
+      console.log('✅ Server logout successful');
+    } catch (error: any) {
+      // Even if server logout fails, tokens are already cleared
+      console.warn('⚠️ Server logout failed, but local tokens already cleared:', error.message);
     } finally {
-      clearAllTokens();
+      console.log('✅ Logout complete');
     }
   },
 
@@ -250,7 +286,9 @@ export const apiService = {
 
   // Email Configuration
   async getEmailConfig() {
-    const response = await api.get('/config/email');
+    const response = await api.get('/config/email', {
+      params: { _t: Date.now() } // Cache busting
+    });
     return response;
   },
 
@@ -259,10 +297,10 @@ export const apiService = {
     return response;
   },
 
-  async validateEmailCredentials(email: string, password: string, imapServer: string = 'imap.gmail.com') {
+  async validateEmailCredentials(email: string, appPassword: string, imapServer: string = 'imap.gmail.com') {
     const response = await api.post('/config/email/validate', {
       email_address: email,
-      email_password: password,
+      email_app_password: appPassword,
       imap_server: imapServer
     });
     return response;
@@ -286,13 +324,39 @@ export const apiService = {
   async getProcessingStatus() {
     return debounceRequest('processing-status', async () => {
       try {
+        console.log('🌐 Making processing status request to: /orders/processing-status');
         const response = await api.get('/orders/processing-status');
+        console.log('✅ Processing status response:', response.data);
         return response;
-      } catch (error) {
+      } catch (error: any) {
+        console.error('❌ Processing status error:', error);
+        console.error('Status error details:', {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        });
         // Return a mock response for now
         return { data: { is_running: false } };
       }
     });
+  },
+
+  // Test authentication
+  async testAuth() {
+    try {
+      console.log('🔐 Testing authentication...');
+      const response = await api.get('/auth/me');
+      console.log('✅ Auth test successful:', response.data);
+      return response;
+    } catch (error: any) {
+      console.error('❌ Auth test failed:', error);
+      console.error('Auth error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      throw error;
+    }
   },
 
   // Orders
@@ -302,7 +366,11 @@ export const apiService = {
     params.append('skip', skip.toString());
     params.append('limit', limit.toString());
     
-    const response = await api.get(`/orders/?${params.toString()}`);
+    const url = `/orders/?${params.toString()}`;
+    console.log('🌐 Making API request to:', url);
+    console.log('🔑 Auth token present:', !!getAuthToken());
+    
+    const response = await api.get(url);
     return response;
   },
 
