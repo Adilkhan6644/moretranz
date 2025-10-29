@@ -396,23 +396,23 @@ export const apiService = {
         responseType: 'blob' // Important: tell axios to expect binary data
       });
       
-      // Create a blob URL from the response
-      const blob = new Blob([response.data]);
+      // Create a blob URL from the response with the correct MIME type
+      const contentType = response.headers['content-type'] || 'application/octet-stream';
+      const blob = new Blob([response.data], { type: contentType });
       const url = window.URL.createObjectURL(blob);
       
       // Get filename from response headers or use a default
       const contentDisposition = response.headers['content-disposition'];
-      let filename = `attachment_${attachmentId}.${format === 'pdf' ? 'pdf' : 'png'}`;
+      let filename = `attachment_${attachmentId}.${format}`;
       
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
         }
-      } else if (fileType && format === 'png') {
+      } else if (fileType) {
         // If no content-disposition header, use the file type from the attachment data
-        filename = `attachment_${attachmentId}.png`;
-        // filename = `attachment_${attachmentId}.${fileType}`;
+        filename = `attachment_${attachmentId}.${fileType}`;
       }
       
       // Create a temporary link element and trigger download

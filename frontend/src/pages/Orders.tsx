@@ -740,7 +740,7 @@ const Orders: React.FC = () => {
                             )}
                             <button
                               className="btn btn-secondary"
-                              onClick={() => handleDownloadFile(attachment.id, 'png', attachment.file_type)}
+                              onClick={() => handleDownloadFile(attachment.id, attachment.file_type as any || 'png', attachment.file_type)}
                               style={{ padding: '5px 10px', fontSize: '12px' }}
                             >
                               <Download size={14} style={{ marginRight: '4px' }} />
