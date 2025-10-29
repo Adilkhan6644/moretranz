@@ -319,7 +319,7 @@ const Orders: React.FC = () => {
     }
   };
 
-  const handleDownloadFile = async (attachmentId: number, format: 'pdf' | 'original' = 'pdf', fileType?: string) => {
+  const handleDownloadFile = async (attachmentId: number, format: 'pdf' | 'png' | 'jpg' | 'jpeg' | 'gif' | 'bmp' | 'txt' | 'html' = 'pdf', fileType?: string) => {
     try {
       await apiService.downloadAttachment(attachmentId, format, fileType);
     } catch (error: any) {
@@ -740,7 +740,7 @@ const Orders: React.FC = () => {
                             )}
                             <button
                               className="btn btn-secondary"
-                              onClick={() => handleDownloadFile(attachment.id, 'original', attachment.file_type)}
+                              onClick={() => handleDownloadFile(attachment.id, 'png', attachment.file_type)}
                               style={{ padding: '5px 10px', fontSize: '12px' }}
                             >
                               <Download size={14} style={{ marginRight: '4px' }} />

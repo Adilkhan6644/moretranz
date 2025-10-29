@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // Use relative URL for API calls to work with both direct IP and domain access
-// const API_BASE_URL = "/api/v1";
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = "/api/v1";
+// const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
 
 
 
@@ -389,7 +389,7 @@ export const apiService = {
     return response;
   },
 
-  async downloadAttachment(attachmentId: number, format: 'pdf' | 'original' = 'pdf', fileType?: string) {
+  async downloadAttachment(attachmentId: number, format: 'pdf' | 'png' | 'jpg' | 'jpeg' | 'gif' | 'bmp' | 'txt' | 'html' = 'pdf', fileType?: string) {
     try {
       // Make an authenticated request to get the file
       const response = await api.get(`/orders/attachments/${attachmentId}/download?format=${format}`, {
@@ -402,16 +402,17 @@ export const apiService = {
       
       // Get filename from response headers or use a default
       const contentDisposition = response.headers['content-disposition'];
-      let filename = `attachment_${attachmentId}.${format === 'pdf' ? 'pdf' : 'file'}`;
+      let filename = `attachment_${attachmentId}.${format === 'pdf' ? 'pdf' : 'png'}`;
       
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="(.+)"/);
         if (filenameMatch) {
           filename = filenameMatch[1];
         }
-      } else if (fileType && format === 'original') {
+      } else if (fileType && format === 'png') {
         // If no content-disposition header, use the file type from the attachment data
-        filename = `attachment_${attachmentId}.${fileType}`;
+        filename = `attachment_${attachmentId}.png`;
+        // filename = `attachment_${attachmentId}.${fileType}`;
       }
       
       // Create a temporary link element and trigger download
