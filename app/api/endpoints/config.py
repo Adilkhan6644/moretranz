@@ -36,11 +36,12 @@ def get_email_config(db: Session = Depends(get_db), current_user: User = Depends
     )
 
 @router.put("/email")
-def update_email_config(config: UserEmailConfigUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def update_email_config(config: UserEmailConfigUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update current user's email configuration"""
-    from app.services.scheduler import email_scheduler
+    from app.services.scheduler import email_scheduler_manager
     
     old_sleep_time = current_user.sleep_time
+    is_currently_processing = email_scheduler_manager.is_user_processing(current_user.id)
     
     # Update user's email configuration
     current_user.email_address = config.email_address
@@ -52,9 +53,10 @@ def update_email_config(config: UserEmailConfigUpdate, db: Session = Depends(get
     
     db.commit()
     
-    # Update scheduler interval if it changed and scheduler is running
-    if email_scheduler.is_running and old_sleep_time != config.sleep_time:
-        email_scheduler.update_interval(config.sleep_time)
+    # If user is currently processing and interval changed, restart with new interval
+    if is_currently_processing and old_sleep_time != config.sleep_time:
+        await email_scheduler_manager.stop_user_processing(current_user.id)
+        await email_scheduler_manager.start_user_processing(current_user.id, config.sleep_time)
     
     return {"status": "Email configuration updated successfully"}
 

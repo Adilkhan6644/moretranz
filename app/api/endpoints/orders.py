@@ -6,7 +6,7 @@ import os
 from app.db.session import get_db
 from app.schemas.order import Order, OrderCreate
 from app.services.email_processor import EmailProcessor
-from app.services.scheduler import email_scheduler
+from app.services.scheduler import email_scheduler_manager
 from app.models.order import Order as OrderModel, Attachment, PrintJob, ProcessingLog
 from app.websocket_manager import manager
 from app.api.endpoints.auth import get_current_user
@@ -41,14 +41,26 @@ def get_latest_order(db: Session = Depends(get_db), current_user: User = Depends
     return order
 
 @router.get("/processing-status")
-async def get_processing_status():
-    """Get the current status of email processing"""
-    status = email_scheduler.get_status()
+async def get_processing_status(current_user: User = Depends(get_current_user)):
+    """Get the current status of email processing for the logged-in user"""
+    status = email_scheduler_manager.get_user_status(current_user.id)
     return {
         "status": "running" if status["is_running"] else "stopped",
         "is_processing": status["is_running"],
         "scheduler_running": status["scheduler_running"],
-        "jobs": status["jobs"]
+        "user_id": current_user.id,
+        "jobs": status.get("jobs", [])
+    }
+
+@router.get("/active-users")
+async def get_active_users(current_user: User = Depends(get_current_user)):
+    """Get list of all users currently running email processing (for debugging)"""
+    active_users = email_scheduler_manager.get_all_active_users()
+    return {
+        "active_users": active_users,
+        "total_active": len(active_users),
+        "your_user_id": current_user.id,
+        "you_are_active": current_user.id in active_users
     }
 
 @router.get("/{order_id}", response_model=Order)
@@ -170,9 +182,13 @@ async def start_processing(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Start the email processing service"""
-    if email_scheduler.is_running:
-        return {"status": "Email processing is already running"}
+    """Start the email processing service for the current user only"""
+    # Check if already running for this user
+    if email_scheduler_manager.is_user_processing(current_user.id):
+        return {
+            "status": "Email processing is already running for your account",
+            "user_id": current_user.id
+        }
     
     # Check if current user has email configuration
     if not current_user.email_address or not current_user.email_app_password:
@@ -207,18 +223,31 @@ async def start_processing(
             detail=f"Failed to validate email credentials: {str(e)}"
         )
     
-    sleep_time = current_user.sleep_time
-    await email_scheduler.start_processing(sleep_time)
-    return {"status": "Email processing started successfully"}
+    sleep_time = current_user.sleep_time or 5  # Default to 5 seconds if not set
+    await email_scheduler_manager.start_user_processing(current_user.id, sleep_time)
+    
+    return {
+        "status": "Email processing started successfully for your account",
+        "user_id": current_user.id,
+        "message": f"Your emails will be checked every {sleep_time} seconds. Other users are not affected."
+    }
 
 @router.post("/stop-processing")
-async def stop_processing(_: User = Depends(get_current_user)):
-    """Stop the email processing service"""
-    if not email_scheduler.is_running:
-        return {"status": "Email processing is not running"}
+async def stop_processing(current_user: User = Depends(get_current_user)):
+    """Stop the email processing service for the current user only"""
+    if not email_scheduler_manager.is_user_processing(current_user.id):
+        return {
+            "status": "Email processing is not running for your account",
+            "user_id": current_user.id
+        }
         
-    await email_scheduler.stop_processing()
-    return {"status": "Email processing stopped"}
+    await email_scheduler_manager.stop_user_processing(current_user.id)
+    
+    return {
+        "status": "Email processing stopped for your account",
+        "user_id": current_user.id,
+        "message": "Your email processing has been stopped. Other users are not affected."
+    }
 
 @router.post("/{order_id}/print-attachments")
 async def print_order_attachments(
