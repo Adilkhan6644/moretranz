@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // Use relative URL for API calls to work with both direct IP and domain access
-const API_BASE_URL = "/api/v1";
-// const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+// const API_BASE_URL = "/api/v1";
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
 
 
 
@@ -454,6 +454,77 @@ export const apiService = {
   async updatePrinterConfig(config: any) {
     const response = await api.put('/config/printer', config);
     return response;
+  },
+
+  // Desktop App Downloads
+  async downloadDesktopApp() {
+    try {
+      // Use the configured api instance which has auth headers
+      const response = await api.get('/desktop/download', {
+        responseType: 'blob' // Important: tell axios to expect binary data
+      });
+
+      // Get filename from response headers
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'MoreTranzPrinter.exe';
+      
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'application/octet-stream' });
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error: any) {
+      console.error('Download failed:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Download failed';
+      throw new Error(errorMessage);
+    }
+  },
+
+  async downloadDesktopConfig() {
+    try {
+      // Use the configured api instance which has auth headers
+      const response = await api.get('/desktop/download-config', {
+        responseType: 'blob' // Important: tell axios to expect binary data
+      });
+
+      // Get filename from response headers
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'config.json';
+      
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'application/json' });
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error: any) {
+      console.error('Download failed:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Download failed';
+      throw new Error(errorMessage);
+    }
   },
 };
 

@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     
     # File Storage Configuration
     # Use environment variables for production flexibility
-    ATTACHMENTS_FOLDER: str = os.getenv("ATTACHMENTS_FOLDER", "/data/attachments")
+    ATTACHMENTS_FOLDER: str = os.getenv("ATTACHMENTS_FOLDER", "/root/attachments")
     LOGS_FOLDER: str = os.getenv("LOGS_FOLDER", "/data/logs")
     PROCESSED_EMAILS_FILE: str = os.getenv("PROCESSED_EMAILS_FILE", "/data/logs/processed_emails.txt")
     

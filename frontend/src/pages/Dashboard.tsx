@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Square, Activity, Mail, FileText, AlertCircle, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Play, Square, Activity, Mail, FileText, AlertCircle, Loader2, CheckCircle2, XCircle, Download, Monitor } from 'lucide-react';
 import { apiService, forceLogout } from '../services/api';
 import websocketService, { OrderData, StatusData } from '../services/websocket';
 
@@ -316,6 +316,92 @@ const Dashboard: React.FC = () => {
             {stats.failedOrders}
           </div>
           <div className="stat-label">Failed</div>
+        </div>
+      </div>
+
+      {/* Desktop Printer App */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">
+            <Monitor size={20} style={{ marginRight: '10px', display: 'inline' }} />
+            Desktop Printer App
+          </h2>
+        </div>
+        <div className="card-body">
+          <p style={{ marginBottom: '20px', color: '#666' }}>
+            Download and install the desktop app to automatically print attachments to your local printers.
+             - no manual setup needed!
+          </p>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              onClick={async () => {
+                try {
+                  setLoading(true);
+                  await apiService.downloadDesktopApp();
+                  alert('Download started! After installation, the app will auto-configure with your credentials.');
+                } catch (error: any) {
+                  alert('Download failed: ' + (error.message || 'Unknown error'));
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}
+            >
+              {loading ? <Loader2 size={16} className="spinning" /> : <Download size={16} />}
+              Download Desktop App
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  setLoading(true);
+                  await apiService.downloadDesktopConfig();
+                  alert('Config file downloaded! Place it in the desktop app folder if you already have it installed.');
+                } catch (error: any) {
+                  alert('Download failed: ' + (error.message || 'Unknown error'));
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}
+            >
+              <Download size={16} />
+              Download Config Only
+            </button>
+          </div>
+          <div style={{ marginTop: '15px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '4px', fontSize: '13px', color: '#495057' }}>
+            <strong>📌 Quick Setup:</strong>
+            <ol style={{ margin: '8px 0 0 20px', padding: 0 }}>
+              <li>Download and install the desktop app</li>
+              <li>Select your label and body printers when prompted</li>
+              <li>The app will automatically connect and start printing!</li>
+            </ol>
+          </div>
         </div>
       </div>
 

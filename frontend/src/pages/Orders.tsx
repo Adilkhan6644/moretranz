@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { apiService, forceLogout } from '../services/api';
 import websocketService, { OrderData } from '../services/websocket';
+import printService, { AttachmentPrintData } from '../services/printService';
 
 interface Order {
   id: number;
@@ -153,6 +154,13 @@ const Orders: React.FC = () => {
       // The WebSocket connection should persist regardless of processing status
     });
     
+    // Set up WebSocket listener for attachment ready (automatic printing)
+    websocketService.on('attachment_ready', (attachmentData: AttachmentPrintData) => {
+      console.log('🖨️ Attachment ready for printing:', attachmentData);
+      // Queue the attachment for automatic printing
+      printService.queueAttachment(attachmentData);
+    });
+
     // Set up WebSocket listener for new orders
     const handleNewOrder = (orderData: OrderData) => {
       console.log('📦 New order received via WebSocket:', orderData);

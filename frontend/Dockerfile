@@ -14,8 +14,8 @@ RUN npm ci --only=production
 COPY . .
 
 # Build the application with environment variables
-ARG REACT_APP_API_URL=/api/v1
-# ARG REACT_APP_API_URL=http://localhost:8000/api/v1
+# ARG REACT_APP_API_URL=/api/v1
+ARG REACT_APP_API_URL=http://localhost:8000/api/v1
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
 RUN npm run build
 

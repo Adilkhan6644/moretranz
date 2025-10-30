@@ -30,7 +30,7 @@ services:
       IMAP_SERVER: ${IMAP_SERVER:-imap.gmail.com}
       ALLOWED_SENDERS: ${ALLOWED_SENDERS:-""}
       EMAIL_PROCESSING_ENABLED: ${EMAIL_PROCESSING_ENABLED:-false}
-      ATTACHMENTS_FOLDER: /data/attachments
+      ATTACHMENTS_FOLDER: /root/attachments
       LOGS_FOLDER: /data/logs
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
       ALLOWED_FILE_TYPES: ${ALLOWED_FILE_TYPES:-pdf,png,jpg,jpeg,gif,bmp,txt,html}
@@ -40,9 +40,11 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - /data/moretranz/attachments:/data/attachments
+      - /root/attachments:/root/attachments
       - /data/moretranz/logs:/data/logs
       - /tmp:/tmp
+      # Mount desktop app installer (only the built .exe file)
+      - ./desktop-app/dist:/app/static/desktop-app:ro
     restart: unless-stopped
 
   # React Frontend
@@ -50,8 +52,8 @@ services:
     build:
       context: ./frontend
       args:
-        REACT_APP_API_URL: /api/v1
-        # REACT_APP_API_URL: http://localhost:8000/api/v1
+        # REACT_APP_API_URL: /api/v1
+        REACT_APP_API_URL: http://localhost:8000/api/v1
     container_name: moretranz-frontend
     depends_on:
       - backend

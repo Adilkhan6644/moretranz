@@ -1,6 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import orders, config, auth
+from app.api.endpoints import orders, config, auth, desktop
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
@@ -28,6 +28,7 @@ app.add_middleware(
 app.include_router(orders.router, prefix=f"{settings.API_V1_STR}/orders", tags=["orders"])
 app.include_router(config.router, prefix=f"{settings.API_V1_STR}/config", tags=["config"])
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
+app.include_router(desktop.router, prefix=f"{settings.API_V1_STR}/desktop", tags=["desktop"])
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")

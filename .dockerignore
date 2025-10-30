@@ -48,6 +48,11 @@ logs/
 frontend/node_modules/
 frontend/build/
 
+# Desktop app source code (not needed in Docker - only installer .exe needed)
+desktop-app/
+!desktop-app/dist/
+!desktop-app/dist/**/*.exe
+
 # Database files
 *.db
 *.sqlite

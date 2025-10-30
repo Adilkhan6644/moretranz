@@ -1,5 +1,5 @@
 export interface WebSocketMessage {
-  type: 'new_order' | 'status_update';
+  type: 'new_order' | 'status_update' | 'attachment_ready';
   data: any;
 }
 
@@ -53,7 +53,10 @@ class WebSocketService {
       this.ws = null;
     }
 
-    const wsUrl = `ws://localhost:8000/ws`;
+    // Use WebSocket URL based on environment
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host; // Uses current host (handles localhost and production)
+    const wsUrl = `${protocol}//${host}/ws`;
     console.log('🔌 Connecting to WebSocket:', wsUrl);
     
     this.ws = new WebSocket(wsUrl);

@@ -67,5 +67,13 @@ class ConnectionManager:
         })
         await self.broadcast(message)
 
+    async def broadcast_attachment_ready(self, attachment_data: dict):
+        """Broadcast that an attachment is ready for printing to all connected clients"""
+        message = json.dumps({
+            "type": "attachment_ready",
+            "data": attachment_data
+        })
+        await self.broadcast(message)
+
 # Global WebSocket manager instance
 manager = ConnectionManager()

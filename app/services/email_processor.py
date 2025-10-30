@@ -791,8 +791,17 @@ class EmailProcessor:
                         self.db.commit()
                         print(f"✅ Attachment record saved to database")
 
-                        # Print attachment
-                        await self.printer_service.print_file(attachment)
+                        # Notify client to print attachment (client-side printing)
+                        await self.broadcast_attachment_ready({
+                            "id": attachment.id,
+                            "order_id": attachment.order_id,
+                            "file_name": attachment.file_name,
+                            "file_type": attachment.file_type,
+                            "sheet_type": attachment.sheet_type,
+                            "sheet_number": attachment.sheet_number,
+                            "pdf_path": attachment.pdf_path,
+                            "is_label": self.printer_service.is_label_file(attachment.file_path)
+                        })
                         
                     except Exception as e:
                         print(f"❌ Failed to process attachment: {str(e)}")
@@ -907,8 +916,17 @@ class EmailProcessor:
                         self.db.commit()
                         print(f"✅ Download saved to database")
                         
-                        # Print the downloaded file
-                        await self.printer_service.print_file(attachment)
+                        # Notify client to print attachment (client-side printing)
+                        await self.broadcast_attachment_ready({
+                            "id": attachment.id,
+                            "order_id": attachment.order_id,
+                            "file_name": attachment.file_name,
+                            "file_type": attachment.file_type,
+                            "sheet_type": attachment.sheet_type,
+                            "sheet_number": attachment.sheet_number,
+                            "pdf_path": attachment.pdf_path,
+                            "is_label": self.printer_service.is_label_file(attachment.file_path)
+                        })
                     else:
                         print(f"❌ Failed to download file from URL")
                         self.log_to_db("URL Download", "failed", f"Failed to download: {url}", order.id)
@@ -996,8 +1014,17 @@ class EmailProcessor:
             self.db.commit()
             print(f"✅ Email body PDF record saved to database")
             
-            # Print email body PDF
-            await self.printer_service.print_file(email_attachment)
+            # Notify client to print attachment (client-side printing)
+            await self.broadcast_attachment_ready({
+                "id": email_attachment.id,
+                "order_id": email_attachment.order_id,
+                "file_name": email_attachment.file_name,
+                "file_type": email_attachment.file_type,
+                "sheet_type": email_attachment.sheet_type,
+                "sheet_number": email_attachment.sheet_number,
+                "pdf_path": email_attachment.pdf_path,
+                "is_label": False  # Email body is always a document, not a label
+            })
             
         except Exception as e:
             print(f"❌ Failed to create email body PDF: {str(e)}")
@@ -1050,3 +1077,11 @@ class EmailProcessor:
             print(f"📡 Broadcasted order update: {order.po_number} - {order.status}")
         except Exception as e:
             print(f"❌ Failed to broadcast order update: {str(e)}")
+
+    async def broadcast_attachment_ready(self, attachment_data: dict):
+        """Broadcast that an attachment is ready for printing to all connected WebSocket clients"""
+        try:
+            await manager.broadcast_attachment_ready(attachment_data)
+            print(f"📡 Broadcasted attachment ready for printing: {attachment_data.get('file_name', 'unknown')}")
+        except Exception as e:
+            print(f"❌ Failed to broadcast attachment ready: {str(e)}")
