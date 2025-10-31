@@ -21,6 +21,8 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processingAction, setProcessingAction] = useState<'start' | 'stop' | null>(null);
+  const [selectedOS, setSelectedOS] = useState<'windows' | 'macos'>('windows');
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     // Initial setup
@@ -44,6 +46,45 @@ const Dashboard: React.FC = () => {
     
     init();
     
+    // Handle OS selection events
+    const handleOSSelection = (event: any) => {
+      const os = event.detail as 'windows' | 'macos';
+      setSelectedOS(os);
+      
+      // Update button styles
+      document.querySelectorAll('.os-select-btn').forEach(btn => {
+        const btnElement = btn as HTMLElement;
+        const btnOS = btnElement.getAttribute('data-os');
+        if (btnOS === os) {
+          btnElement.style.backgroundColor = '#007bff';
+          btnElement.style.color = 'white';
+          btnElement.style.borderColor = '#007bff';
+        } else {
+          btnElement.style.backgroundColor = 'white';
+          btnElement.style.color = '#495057';
+          btnElement.style.borderColor = '#dee2e6';
+        }
+      });
+    };
+    
+    window.addEventListener('select-os', handleOSSelection as EventListener);
+    
+    // Initialize button styles
+    const styleTimeout = setTimeout(() => {
+      const windowsBtn = document.getElementById('os-windows-btn');
+      const macosBtn = document.getElementById('os-macos-btn');
+      if (windowsBtn) {
+        windowsBtn.style.backgroundColor = '#007bff';
+        windowsBtn.style.color = 'white';
+        windowsBtn.style.borderColor = '#007bff';
+      }
+      if (macosBtn) {
+        macosBtn.style.backgroundColor = 'white';
+        macosBtn.style.color = '#495057';
+        macosBtn.style.borderColor = '#dee2e6';
+      }
+    }, 100);
+    
     // Handle page visibility change (when user returns from login page)
     const handleVisibilityChange = () => {
       if (!document.hidden) {
@@ -53,11 +94,6 @@ const Dashboard: React.FC = () => {
     };
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Cleanup
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
     
     // Set up WebSocket listeners
     const handleNewOrder = (order: OrderData) => {
@@ -80,11 +116,14 @@ const Dashboard: React.FC = () => {
     websocketService.onNewOrder(handleNewOrder);
     websocketService.onStatusUpdate(handleStatusUpdate);
 
-    // Cleanup
+    // Combined cleanup
     return () => {
+      window.removeEventListener('select-os', handleOSSelection as EventListener);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       websocketService.off('new_order', handleNewOrder);
       websocketService.off('status_update', handleStatusUpdate);
       websocketService.disconnect();
+      clearTimeout(styleTimeout);
     };
   }, []);
 
@@ -332,36 +371,108 @@ const Dashboard: React.FC = () => {
             Download and install the desktop app to automatically print attachments to your local printers.
              - no manual setup needed!
           </p>
+          
+          {/* OS Selection */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '10px', fontWeight: '500', color: '#495057' }}>
+              Select your operating system:
+            </label>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  const event = new CustomEvent('select-os', { detail: 'windows' });
+                  window.dispatchEvent(event);
+                }}
+                id="os-windows-btn"
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: '2px solid #007bff',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
+                }}
+                className="os-select-btn"
+                data-os="windows"
+              >
+                <Monitor size={16} />
+                Windows
+              </button>
+              <button
+                onClick={() => {
+                  const event = new CustomEvent('select-os', { detail: 'macos' });
+                  window.dispatchEvent(event);
+                }}
+                id="os-macos-btn"
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: 'white',
+                  color: '#495057',
+                  border: '2px solid #dee2e6',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
+                }}
+                className="os-select-btn"
+                data-os="macos"
+              >
+                <Monitor size={16} />
+                macOS
+              </button>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button
               onClick={async () => {
                 try {
-                  setLoading(true);
-                  await apiService.downloadDesktopApp();
-                  alert('Download started! After installation, the app will auto-configure with your credentials.');
+                  setDownloading(true);
+                  await apiService.downloadDesktopApp(selectedOS);
+                  alert(`Download started for ${selectedOS === 'windows' ? 'Windows' : 'macOS'}! After installation, the app will auto-configure with your credentials.`);
                 } catch (error: any) {
                   alert('Download failed: ' + (error.message || 'Unknown error'));
                 } finally {
-                  setLoading(false);
+                  setDownloading(false);
                 }
               }}
-              disabled={loading}
+              disabled={downloading || loading}
               style={{
                 padding: '12px 24px',
                 backgroundColor: '#007bff',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: loading ? 'not-allowed' : 'pointer',
+                cursor: (downloading || loading) ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
                 fontSize: '14px',
-                fontWeight: '500'
+                fontWeight: '500',
+                opacity: (downloading || loading) ? 0.6 : 1
               }}
             >
-              {loading ? <Loader2 size={16} className="spinning" /> : <Download size={16} />}
-              Download Desktop App
+              {(downloading || loading) ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Downloading...
+                </>
+              ) : (
+                <>
+                  <Download size={16} />
+                  Download Desktop App ({selectedOS === 'windows' ? 'Windows' : 'macOS'})
+                </>
+              )}
             </button>
             <button
               onClick={async () => {
@@ -397,6 +508,7 @@ const Dashboard: React.FC = () => {
           <div style={{ marginTop: '15px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '4px', fontSize: '13px', color: '#495057' }}>
             <strong>📌 Quick Setup:</strong>
             <ol style={{ margin: '8px 0 0 20px', padding: 0 }}>
+              <li>Select your operating system above</li>
               <li>Download and install the desktop app</li>
               <li>Select your label and body printers when prompted</li>
               <li>The app will automatically connect and start printing!</li>

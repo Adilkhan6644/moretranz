@@ -457,16 +457,17 @@ export const apiService = {
   },
 
   // Desktop App Downloads
-  async downloadDesktopApp() {
+  async downloadDesktopApp(osType: 'windows' | 'macos' = 'windows') {
     try {
       // Use the configured api instance which has auth headers
       const response = await api.get('/desktop/download', {
+        params: { os_type: osType },
         responseType: 'blob' // Important: tell axios to expect binary data
       });
 
       // Get filename from response headers
       const contentDisposition = response.headers['content-disposition'];
-      let filename = 'MoreTranzPrinter.exe';
+      let filename = osType === 'macos' ? 'MoreTranzPrinter-Setup.dmg' : 'MoreTranzPrinter-Setup.exe';
       
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);

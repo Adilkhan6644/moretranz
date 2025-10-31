@@ -69,28 +69,54 @@ async def desktop_authenticate(
     }
 
 @router.get("/download")
-async def download_desktop_app(current_user: User = Depends(get_current_user)):
-    """Download the desktop app installer with auto-configured settings"""
+async def download_desktop_app(
+    os_type: str = "windows",
+    current_user: User = Depends(get_current_user)
+):
+    """Download the desktop app installer with auto-configured settings
+    
+    Args:
+        os_type: Operating system type - "windows" or "macos"
+    """
     try:
-        # Path to the built installer (mounted volume in Docker)
-        # Priority order: Docker volume -> local development paths
         import glob
         
-        # Try exact matches first, then glob patterns for versioned filenames
-        installer_paths = [
-            # Production: Docker volume mount (read-only) - exact match
-            os.path.join("static", "desktop-app", "MoreTranz Printer Setup.exe"),
-            # Production: Docker volume mount - versioned
-            os.path.join("static", "desktop-app", "MoreTranz Printer Setup *.exe"),
-            # Development: local paths - exact match
-            os.path.join("desktop-app", "dist", "MoreTranz Printer Setup.exe"),
-            # Development: local paths - versioned (actual build output)
-            os.path.join("desktop-app", "dist", "MoreTranz Printer Setup *.exe"),
-            # Development: alternative paths
-            os.path.join("..", "desktop-app", "dist", "MoreTranz Printer Setup *.exe"),
-            os.path.join("desktop-app", "dist", "win-unpacked", "MoreTranz Printer.exe"),
-            os.path.join("build", "MoreTranz Printer Setup *.exe"),
-        ]
+        # Determine paths based on OS type
+        if os_type.lower() in ["macos", "mac", "darwin"]:
+            # macOS paths - look for .dmg files
+            installer_paths = [
+                # Production: Docker volume mount - exact match
+                os.path.join("static", "desktop-app", "MoreTranz Printer.dmg"),
+                # Production: Docker volume mount - versioned
+                os.path.join("static", "desktop-app", "MoreTranz Printer *.dmg"),
+                # Development: local paths - exact match
+                os.path.join("desktop-app", "dist", "MoreTranz Printer.dmg"),
+                # Development: local paths - versioned (actual build output)
+                os.path.join("desktop-app", "dist", "MoreTranz Printer *.dmg"),
+                # Development: alternative paths
+                os.path.join("..", "desktop-app", "dist", "MoreTranz Printer *.dmg"),
+                os.path.join("build", "MoreTranz Printer *.dmg"),
+            ]
+            default_filename = "MoreTranzPrinter-Setup.dmg"
+            build_instruction = "1. Run: cd desktop-app && npm install && npm run build:mac\n2. This creates: desktop-app/dist/MoreTranz Printer.dmg\n"
+        else:
+            # Windows paths - look for .exe files (default)
+            installer_paths = [
+                # Production: Docker volume mount (read-only) - exact match
+                os.path.join("static", "desktop-app", "MoreTranz Printer Setup.exe"),
+                # Production: Docker volume mount - versioned
+                os.path.join("static", "desktop-app", "MoreTranz Printer Setup *.exe"),
+                # Development: local paths - exact match
+                os.path.join("desktop-app", "dist", "MoreTranz Printer Setup.exe"),
+                # Development: local paths - versioned (actual build output)
+                os.path.join("desktop-app", "dist", "MoreTranz Printer Setup *.exe"),
+                # Development: alternative paths
+                os.path.join("..", "desktop-app", "dist", "MoreTranz Printer Setup *.exe"),
+                os.path.join("desktop-app", "dist", "win-unpacked", "MoreTranz Printer.exe"),
+                os.path.join("build", "MoreTranz Printer Setup *.exe"),
+            ]
+            default_filename = "MoreTranzPrinter-Setup.exe"
+            build_instruction = "1. Run: cd desktop-app && npm install && npm run build:win\n2. This creates: desktop-app/dist/MoreTranz Printer Setup.exe\n"
         
         installer_path = None
         checked_paths = []
@@ -110,10 +136,9 @@ async def download_desktop_app(current_user: User = Depends(get_current_user)):
         
         if not installer_path:
             error_msg = (
-                "Desktop app installer not found.\n\n"
+                f"Desktop app installer for {os_type} not found.\n\n"
                 "Please build the installer first:\n"
-                "1. Run: cd desktop-app && npm install && npm run build:win\n"
-                "2. This creates: desktop-app/dist/MoreTranz Printer Setup.exe\n"
+                + build_instruction +
                 f"3. Checked paths: {', '.join(checked_paths)}"
             )
             raise HTTPException(
@@ -131,7 +156,7 @@ async def download_desktop_app(current_user: User = Depends(get_current_user)):
         # Extract clean filename for download (remove path, keep version number)
         installer_filename = os.path.basename(installer_path)
         # Use a simpler name for the downloaded file
-        download_filename = "MoreTranzPrinter-Setup.exe"
+        download_filename = default_filename
         
         return FileResponse(
             path=installer_path,
