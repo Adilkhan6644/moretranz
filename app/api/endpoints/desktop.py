@@ -63,6 +63,7 @@ async def desktop_authenticate(
             "labelPrinter": "",
             "bodyPrinter": "",
             "autoStart": True,
+            "downloadPath": "",  # User will configure this in desktop app
             "userId": user.id,
             "userEmail": user.email
         }
@@ -98,7 +99,7 @@ async def download_desktop_app(
                 os.path.join("build", "MoreTranz Printer *.dmg"),
             ]
             default_filename = "MoreTranzPrinter-Setup.dmg"
-            build_instruction = "1. Run: cd desktop-app && npm install && npm run build:mac\n2. This creates: desktop-app/dist/MoreTranz Printer.dmg\n"
+            build_instruction = "1. Run: cd desktop-app && npm install && npm run build:mac\n2. This creates: desktop-app/dist/MoreTranz Printer-1.0.0.dmg (or similar versioned filename)\n"
         else:
             # Windows paths - look for .exe files (default)
             installer_paths = [
@@ -224,6 +225,7 @@ async def get_desktop_config(
         "labelPrinter": "",  # User selects in app
         "bodyPrinter": "",   # User selects in app
         "autoStart": True,
+        "downloadPath": "",  # User selects in app
         "userId": current_user.id,
         "userEmail": current_user.email
     }
@@ -275,7 +277,8 @@ async def download_config_file(
         "refreshToken": refresh_token,
         "labelPrinter": "",
         "bodyPrinter": "",
-        "autoStart": True
+        "autoStart": True,
+        "downloadPath": ""  # User will configure this in desktop app
     }
     
     # Create temporary file

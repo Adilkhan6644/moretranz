@@ -8,6 +8,7 @@ async function loadConfig() {
     document.getElementById('authToken').value = config.authToken || '';
     document.getElementById('labelPrinter').value = config.labelPrinter || '';
     document.getElementById('bodyPrinter').value = config.bodyPrinter || '';
+    document.getElementById('downloadPath').value = config.downloadPath || '';
     document.getElementById('autoStart').checked = config.autoStart !== false;
     
     // If server URL and token are already set, show success message
@@ -91,6 +92,18 @@ async function testConnection() {
   }
 }
 
+// Browse for download folder
+async function browseFolder() {
+  try {
+    const path = await ipcRenderer.invoke('browse-folder');
+    if (path) {
+      document.getElementById('downloadPath').value = path;
+    }
+  } catch (error) {
+    showStatus('❌ Error selecting folder: ' + error.message, 'error');
+  }
+}
+
 // Save configuration
 async function saveConfig(event) {
   event.preventDefault();
@@ -100,6 +113,7 @@ async function saveConfig(event) {
     authToken: document.getElementById('authToken').value,
     labelPrinter: document.getElementById('labelPrinter').value,
     bodyPrinter: document.getElementById('bodyPrinter').value,
+    downloadPath: document.getElementById('downloadPath').value,
     autoStart: document.getElementById('autoStart').checked
   };
   
@@ -133,6 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadPrinters();
   
   document.getElementById('testBtn').addEventListener('click', testConnection);
+  document.getElementById('browseBtn').addEventListener('click', browseFolder);
   document.getElementById('configForm').addEventListener('submit', saveConfig);
 });
 

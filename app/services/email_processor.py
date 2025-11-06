@@ -795,6 +795,7 @@ class EmailProcessor:
                         await self.broadcast_attachment_ready({
                             "id": attachment.id,
                             "order_id": attachment.order_id,
+                            "po_number": order.po_number,  # Include PO number for folder organization
                             "file_name": attachment.file_name,
                             "file_type": attachment.file_type,
                             "sheet_type": attachment.sheet_type,
@@ -920,6 +921,7 @@ class EmailProcessor:
                         await self.broadcast_attachment_ready({
                             "id": attachment.id,
                             "order_id": attachment.order_id,
+                            "po_number": order.po_number,  # Include PO number for folder organization
                             "file_name": attachment.file_name,
                             "file_type": attachment.file_type,
                             "sheet_type": attachment.sheet_type,
@@ -1018,6 +1020,7 @@ class EmailProcessor:
             await self.broadcast_attachment_ready({
                 "id": email_attachment.id,
                 "order_id": email_attachment.order_id,
+                "po_number": order.po_number,  # Include PO number for folder organization
                 "file_name": email_attachment.file_name,
                 "file_type": email_attachment.file_type,
                 "sheet_type": email_attachment.sheet_type,
