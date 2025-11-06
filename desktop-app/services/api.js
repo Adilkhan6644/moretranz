@@ -143,13 +143,42 @@ class ApiClient {
       });
 
       // Get filename from Content-Disposition header or use default
-      let filename = `attachment_${attachmentId}.pdf`;
+      let filename = `attachment_${attachmentId}.pdf`; // Default fallback
       const contentDisposition = response.headers['content-disposition'];
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
         if (filenameMatch && filenameMatch[1]) {
           filename = filenameMatch[1].replace(/['"]/g, '');
         }
+      }
+      
+      // If no extension in filename, infer from format or Content-Type
+      if (!path.extname(filename)) {
+        // Check Content-Type header
+        const contentType = response.headers['content-type'] || '';
+        if (contentType.includes('image/png')) {
+          filename = filename.replace(/\.\w+$/, '') + '.png';
+        } else if (contentType.includes('image/jpeg') || contentType.includes('image/jpg')) {
+          filename = filename.replace(/\.\w+$/, '') + '.jpg';
+        } else if (contentType.includes('application/pdf')) {
+          filename = filename.replace(/\.\w+$/, '') + '.pdf';
+        } else if (format === 'original') {
+          // If downloading original and no extension, try to keep original extension
+          // This will be handled by the calling code
+        } else {
+          // Default to PDF if format is pdf
+          filename = filename.replace(/\.\w+$/, '') + '.pdf';
+        }
+      }
+      
+      // Ensure filename has correct extension based on format
+      const currentExt = path.extname(filename).toLowerCase();
+      if (format === 'original' && !currentExt) {
+        // If no extension and downloading original, we'll rely on Content-Type or metadata
+        // The calling code will handle this
+      } else if (format === 'pdf' && currentExt !== '.pdf') {
+        // If downloading PDF but filename doesn't have .pdf, fix it
+        filename = path.basename(filename, currentExt) + '.pdf';
       }
 
       // Save file to temp directory
