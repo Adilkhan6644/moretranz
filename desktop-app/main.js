@@ -136,9 +136,9 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js')
     },
     icon: path.join(__dirname, 'assets/icon.png'), // Optional: add an icon
-    show: false, // Always start hidden (will be shown by ready-to-show handler)
+    show: true, // Show window when app opens
     autoHideMenuBar: true,
-    skipTaskbar: false, // Allow it in taskbar but minimize
+    skipTaskbar: false, // Allow it in taskbar
     alwaysOnTop: false, // Don't force on top
     focusable: true // Make sure window can receive focus
   });
@@ -146,26 +146,16 @@ function createWindow() {
   // Load the app
   mainWindow.loadFile('index.html');
 
-  // Show window only if configuration is incomplete OR first launch
+  // ALWAYS show window when app is opened
   mainWindow.once('ready-to-show', () => {
     try {
       const fs = require('fs');
       const configPath = getConfigPath();
       const firstLaunchFlagPath = path.join(app.getPath('userData'), '.first-launch');
       
-      const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
-      
-      // Check if config.json exists but is empty/incomplete
-      // Note: downloadPath is optional - printing can work without it
-      const isConfigComplete = config.serverUrl && 
-                              config.authToken && 
-                              config.labelPrinter && 
-                              config.bodyPrinter;
-      
       // Check if this is the first launch after installation
       const isFirstLaunch = !fs.existsSync(firstLaunchFlagPath);
       
-      // ALWAYS show window on first launch, regardless of config status
         if (isFirstLaunch) {
           console.log('🎉 First launch - showing window');
           // Create flag file to mark that we've launched before
@@ -174,28 +164,27 @@ function createWindow() {
         } catch (err) {
           console.warn('Could not write first launch flag:', err);
         }
-        // Force show and focus the window
+      }
+      
+      // ALWAYS show window when app is opened (user clicked to open it)
+      console.log('📱 Showing window - app opened by user');
         mainWindow.show();
-        mainWindow.focus();
-        // Also bring to front
-        if (mainWindow.setAlwaysOnTop) {
-          mainWindow.setAlwaysOnTop(true);
-          setTimeout(() => mainWindow.setAlwaysOnTop(false), 100);
-        }
-      } else if (!isConfigComplete) {
-        // Show window if configuration is incomplete
-        console.log('⚠️ Configuration incomplete - showing window');
-        mainWindow.show();
-        mainWindow.focus();
-      } else {
-        console.log('✅ Configuration complete - running in background');
-        // Keep window hidden but don't close - app runs in background
-        // User can press Ctrl+Shift+P to show it again
+      mainWindow.focus();
+      
+      // Bring to front briefly
+      if (mainWindow.setAlwaysOnTop) {
+        mainWindow.setAlwaysOnTop(true);
+        setTimeout(() => {
+          if (mainWindow) {
+            mainWindow.setAlwaysOnTop(false);
+          }
+        }, 100);
       }
     } catch (error) {
-      // If config.json doesn't exist or can't be read, show window
-      console.log('⚠️ Configuration file not found - showing window');
+      // If there's any error, show window anyway
+      console.log('⚠️ Error checking config - showing window anyway');
       mainWindow.show();
+      mainWindow.focus();
     }
   });
 
@@ -337,12 +326,27 @@ function initializeServices() {
               const fs = require('fs');
               const path = require('path');
               
-              // Get PO number from attachment data (sanitize for folder name)
+              // Get PO number and customer name from attachment data (sanitize for folder name)
               const poNumber = attachmentData.po_number || `PO_${attachmentData.order_id || 'unknown'}`;
-              const sanitizedPONumber = poNumber.replace(/[<>:"/\\|?*]/g, '_'); // Remove invalid folder name characters
+              let customerName = attachmentData.customer_name || 'UnknownCustomer';
               
-              // Create folder structure: {downloadPath}/{PO_number}/
-              const poFolder = path.join(config.downloadPath, sanitizedPONumber);
+              // Extract only first two words from customer name (safety measure)
+              const customerNameWords = customerName.trim().split(/\s+/);
+              if (customerNameWords.length >= 2) {
+                customerName = customerNameWords.slice(0, 2).join(' ');
+              } else if (customerNameWords.length === 1) {
+                customerName = customerNameWords[0];
+              }
+              
+              // Sanitize both for folder name (remove invalid characters)
+              const sanitizedPONumber = poNumber.replace(/[<>:"/\\|?*]/g, '_');
+              const sanitizedCustomerName = customerName.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, ''); // Remove spaces too
+              
+              // Create folder name: {PO_number}-{CustomerName}
+              const folderName = `${sanitizedPONumber}-${sanitizedCustomerName}`;
+              
+              // Create folder structure: {downloadPath}/{PO_number}-{CustomerName}/
+              const poFolder = path.join(config.downloadPath, folderName);
               
               // Create folder if it doesn't exist
               if (!fs.existsSync(poFolder)) {
@@ -613,23 +617,23 @@ app.whenReady().then(() => {
     console.log('✅ Authentication exists - loading main window');
     createWindow();
       
-      // Ensure main window is visible on first launch
-      // Wait for window to be ready before trying to show it
-      const fs = require('fs');
-      const firstLaunchFlagPath = path.join(app.getPath('userData'), '.first-launch');
-      const isFirstLaunch = !fs.existsSync(firstLaunchFlagPath);
-      
-      // Force show window on first launch (backup to the ready-to-show handler)
-      if (isFirstLaunch && mainWindow) {
-        // Additional fallback: Show window after a delay if it's first launch
-        setTimeout(() => {
-          if (mainWindow && !mainWindow.isVisible()) {
-            console.log('📱 Showing window (fallback for first launch)');
-            mainWindow.show();
-            mainWindow.focus();
+      // Ensure main window is visible when app opens
+      // Additional fallback: Show window after a delay to ensure it appears
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isVisible()) {
+          console.log('📱 Showing window (fallback)');
+          mainWindow.show();
+          mainWindow.focus();
+          if (mainWindow.setAlwaysOnTop) {
+            mainWindow.setAlwaysOnTop(true);
+            setTimeout(() => {
+              if (mainWindow) {
+                mainWindow.setAlwaysOnTop(false);
+              }
+            }, 100);
           }
-        }, 2500);
-      }
+        }
+      }, 1000);
     
     // Initialize services after window is ready
     setTimeout(() => {
@@ -687,18 +691,76 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  // On macOS, keep app running even when all windows are closed
-  if (process.platform !== 'darwin') {
+  // On Windows/Linux, don't quit when windows are closed (app runs in background)
+  // Only quit if explicitly requested (app.isQuiting flag)
+  // On macOS, apps typically stay active even when all windows are closed
+  if (process.platform !== 'darwin' && app.isQuiting) {
     app.quit();
   }
+  // Otherwise, keep running in background (windows are just hidden)
 });
 
 app.on('before-quit', () => {
   app.isQuiting = true;
+  console.log('🛑 Application quitting - cleaning up...');
+  
   // Unregister all shortcuts
+  try {
   globalShortcut.unregisterAll();
+    console.log('✅ Global shortcuts unregistered');
+  } catch (error) {
+    console.warn('⚠️ Error unregistering shortcuts:', error);
+  }
+  
+  // Disconnect WebSocket
   if (wsClient) {
+    try {
     wsClient.disconnect();
+      console.log('✅ WebSocket disconnected');
+    } catch (error) {
+      console.warn('⚠️ Error disconnecting WebSocket:', error);
+    }
+  }
+  
+  // Aggressively stop all printer service processes (kill any SumatraPDF processes)
+  if (process.platform === 'win32') {
+    try {
+      const { execSync } = require('child_process');
+      
+      // Kill SumatraPDF processes multiple times
+      try {
+        execSync('taskkill /F /IM "SumatraPDF-3.4.6-32.exe" /T', { timeout: 5000, stdio: 'ignore' });
+        console.log('✅ SumatraPDF processes killed (attempt 1)');
+      } catch (e) {
+        // Process might not exist, which is fine
+      }
+      
+      // Use PowerShell to kill any remaining processes
+      try {
+        execSync('powershell -ExecutionPolicy Bypass -Command "Get-Process | Where-Object {$_.Name -like \'*Sumatra*\'} | Stop-Process -Force"', { timeout: 5000, stdio: 'ignore' });
+        console.log('✅ SumatraPDF processes killed (attempt 2 - PowerShell)');
+      } catch (e) {
+        // Process might not exist, which is fine
+      }
+      
+      // Final attempt with taskkill filter
+      try {
+        execSync('taskkill /F /FI "IMAGENAME eq SumatraPDF-3.4.6-32.exe" /T', { timeout: 5000, stdio: 'ignore' });
+        console.log('✅ Printer processes cleaned up');
+      } catch (e) {
+        // Process might not exist, which is fine
+      }
+    } catch (error) {
+      console.warn('⚠️ Error cleaning up printer processes:', error);
+    }
+  }
+  
+  // Close all windows
+  if (mainWindow) {
+    mainWindow.destroy();
+  }
+  if (loginWindow) {
+    loginWindow.destroy();
   }
 });
 

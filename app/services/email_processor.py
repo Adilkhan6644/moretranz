@@ -150,7 +150,9 @@ def parse_order_types(text: str) -> List[str]:
     return []
 
 def parse_address(text: str) -> Tuple[str, str]:
-    """Extract name and address from delivery address section"""
+    """Extract name and address from delivery address section
+    Customer name is extracted from the first two words of the first line
+    """
     # Clean the text by removing markdown formatting and special characters
     cleaned_text = re.sub(r'\*([^*]+)\*', r'\1', text)  # Remove asterisks around text
     cleaned_text = re.sub(r'<[^>]+>', '', cleaned_text)  # Remove HTML tags
@@ -159,14 +161,19 @@ def parse_address(text: str) -> Tuple[str, str]:
     lines = [line.strip() for line in cleaned_text.strip().split("\n") if line.strip()]
     
     if len(lines) >= 2:
-        # First non-empty line is usually the name
-        customer_name = lines[0]
+        # First non-empty line contains the name - extract first two words
+        first_line = lines[0]
+        words = first_line.split()
+        # Take first two words as customer name (e.g., "Carrie Browning")
+        customer_name = " ".join(words[:2]) if len(words) >= 2 else first_line
         # Rest is the address
         delivery_address = "\n".join(lines[1:])
         return customer_name, delivery_address
     elif len(lines) == 1:
-        # If only one line, treat it as customer name
-        return lines[0], ""
+        # If only one line, extract first two words as customer name
+        words = lines[0].split()
+        customer_name = " ".join(words[:2]) if len(words) >= 2 else lines[0]
+        return customer_name, ""
     return "", ""
 
 def count_gang_sheets(text: str, job_type: str) -> int:
@@ -796,6 +803,7 @@ class EmailProcessor:
                             "id": attachment.id,
                             "order_id": attachment.order_id,
                             "po_number": order.po_number,  # Include PO number for folder organization
+                            "customer_name": order.customer_name,  # Include customer name for folder organization
                             "file_name": attachment.file_name,
                             "file_type": attachment.file_type,
                             "sheet_type": attachment.sheet_type,
@@ -922,6 +930,7 @@ class EmailProcessor:
                             "id": attachment.id,
                             "order_id": attachment.order_id,
                             "po_number": order.po_number,  # Include PO number for folder organization
+                            "customer_name": order.customer_name,  # Include customer name for folder organization
                             "file_name": attachment.file_name,
                             "file_type": attachment.file_type,
                             "sheet_type": attachment.sheet_type,
@@ -1020,6 +1029,7 @@ class EmailProcessor:
             await self.broadcast_attachment_ready({
                 "id": email_attachment.id,
                 "order_id": email_attachment.order_id,
+                "customer_name": order.customer_name,  # Include customer name for folder organization
                 "po_number": order.po_number,  # Include PO number for folder organization
                 "file_name": email_attachment.file_name,
                 "file_type": email_attachment.file_type,
