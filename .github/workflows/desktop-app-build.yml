@@ -1,0 +1,87 @@
+name: Build Desktop App
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - backdev
+    paths:
+      - 'desktop-app/**'
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  build-windows:
+    name: Build Windows Installer
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./desktop-app
+        run: npm ci
+
+      - name: Build Windows installer
+        working-directory: ./desktop-app
+        run: npm run build:win
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: desktop-app/dist/*.exe
+          retention-days: 30
+
+      - name: Deploy installer to server
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/backdev')
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "desktop-app/dist/*.exe"
+          target: "${{ secrets.SERVER_PATH }}/desktop-app/dist/"
+          strip_components: 2
+
+  build-macos:
+    name: Build macOS Installer
+    runs-on: macos-latest
+    if: false # Disable for now, enable when needed
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./desktop-app
+        run: npm ci
+
+      - name: Build macOS installer
+        working-directory: ./desktop-app
+        run: npm run build:mac
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: desktop-app/dist/*.dmg
+          retention-days: 30
+

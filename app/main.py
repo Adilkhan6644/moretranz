@@ -24,6 +24,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Health check endpoint for CI/CD and monitoring
+@app.get("/health")
+@app.get(f"{settings.API_V1_STR}/health")
+async def health_check():
+    """Health check endpoint for CI/CD pipeline and monitoring"""
+    from app.db.session import SessionLocal
+    from sqlalchemy import text
+    try:
+        # Check database connection
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        return {
+            "status": "healthy",
+            "version": settings.VERSION,
+            "database": "connected"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "version": settings.VERSION,
+            "database": "disconnected",
+            "error": str(e)
+        }
+
 # Include routers
 app.include_router(orders.router, prefix=f"{settings.API_V1_STR}/orders", tags=["orders"])
 app.include_router(config.router, prefix=f"{settings.API_V1_STR}/config", tags=["config"])
