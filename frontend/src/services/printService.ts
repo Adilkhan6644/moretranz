@@ -3,7 +3,7 @@
  * Prints files to user's local printers via browser
  */
 
-import { apiService } from './api';
+import { getAuthToken } from './api';
 
 export interface AttachmentPrintData {
   id: number;
@@ -67,7 +67,7 @@ class PrintService {
    */
   private async downloadFile(attachmentId: number, format: string = 'pdf'): Promise<Blob | null> {
     try {
-      const token = localStorage.getItem('token');
+      const token = getAuthToken();
       const apiUrl = process.env.REACT_APP_API_URL || '';
       const formatParam = format === 'pdf' ? 'pdf' : 'original';
       // Use relative URL if apiUrl is empty (for production)

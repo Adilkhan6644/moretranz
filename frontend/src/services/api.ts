@@ -33,17 +33,100 @@ function debounceRequest<T>(key: string, requestFn: () => Promise<T>): Promise<T
 // --- Auth token helpers ---
 const TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
+const LEGACY_TOKEN_KEY = 'token';
+let tokenExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function decodeJwtPayload(token: string): any | null {
+  try {
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      return null;
+    }
+
+    const base64 = tokenParts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+function isJwtExpired(token: string): boolean {
+  const payload = decodeJwtPayload(token);
+  if (!payload || typeof payload.exp !== 'number') {
+    return true;
+  }
+
+  const nowInSeconds = Math.floor(Date.now() / 1000);
+  return payload.exp <= nowInSeconds;
+}
+
+function clearTokenExpiryTimer() {
+  if (tokenExpiryTimer) {
+    clearTimeout(tokenExpiryTimer);
+    tokenExpiryTimer = null;
+  }
+}
+
+function scheduleTokenExpiryLogout(token: string) {
+  clearTokenExpiryTimer();
+
+  const payload = decodeJwtPayload(token);
+  if (!payload || typeof payload.exp !== 'number') {
+    return;
+  }
+
+  const expiresAtMs = payload.exp * 1000;
+  const delayMs = expiresAtMs - Date.now();
+
+  if (delayMs <= 0) {
+    forceLogout();
+    return;
+  }
+
+  tokenExpiryTimer = setTimeout(() => {
+    console.log('⏰ Access token expired. Logging out automatically.');
+    forceLogout();
+  }, delayMs);
+}
+
+async function clearBrowserCaches() {
+  if (typeof window === 'undefined' || !('caches' in window)) {
+    return;
+  }
+
+  try {
+    const cacheKeys = await caches.keys();
+    await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+    console.log('🧹 Browser cache storage cleared');
+  } catch (error) {
+    console.warn('⚠️ Failed to clear browser cache storage:', error);
+  }
+}
 
 export function setAuthToken(token: string | null) {
   if (token) {
     localStorage.setItem(TOKEN_KEY, token);
+    scheduleTokenExpiryLogout(token);
   } else {
     localStorage.removeItem(TOKEN_KEY);
+    clearTokenExpiryTimer();
   }
 }
 
 export function getAuthToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    return null;
+  }
+
+  if (isJwtExpired(token)) {
+    console.log('⏰ Stored token has expired. Logging out.');
+    forceLogout();
+    return null;
+  }
+
+  return token;
 }
 
 export function setRefreshToken(token: string | null) {
@@ -61,15 +144,20 @@ export function getRefreshToken(): string | null {
 export function clearAllTokens() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  sessionStorage.clear();
+  requestCache.clear();
+  clearTokenExpiryTimer();
 }
 
 export function forceLogout() {
   console.log('🚨 Force logout: clearing all tokens and redirecting to login');
   clearAllTokens();
+  void clearBrowserCaches();
   if (typeof window !== 'undefined') {
     const currentPath = window.location.pathname;
     if (currentPath !== '/login') {
-      window.location.href = '/login';
+      window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
     }
   }
 }
@@ -84,6 +172,12 @@ api.interceptors.request.use((config) => {
       console.warn('⚠️ Invalid token format detected, clearing token');
       clearAllTokens();
       return config;
+    }
+
+    if (isJwtExpired(token)) {
+      console.warn('⚠️ Expired token detected before request, forcing logout');
+      forceLogout();
+      return Promise.reject(new Error('Session expired. Please log in again.'));
     }
     
     config.headers = config.headers || {};
@@ -267,6 +361,7 @@ export const apiService = {
       // Clear tokens immediately to prevent race conditions
       console.log('🧹 Clearing local tokens immediately...');
       clearAllTokens();
+      await clearBrowserCaches();
       
       // Call logout endpoint to clear refresh token on server
       await api.post('/auth/logout');
@@ -528,5 +623,10 @@ export const apiService = {
     }
   },
 };
+
+const existingToken = localStorage.getItem(TOKEN_KEY);
+if (existingToken && !isJwtExpired(existingToken)) {
+  scheduleTokenExpiryLogout(existingToken);
+}
 
 export default apiService;
